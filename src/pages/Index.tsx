@@ -72,12 +72,17 @@ const Index = () => {
           className="space-y-6"
         >
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground">
-              Groundwater Monitoring Dashboard
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Real-time IoT sensor analytics for {selectedState}
+          <div className="mb-6">
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="text-xl md:text-2xl font-bold text-foreground tracking-tight">
+                Groundwater Monitoring Dashboard
+              </h1>
+              <span className="badge-squared bg-accent text-accent-foreground text-[10px]">
+                BETA
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Real-time IoT sensor analytics for <span className="font-semibold text-foreground">{selectedState}</span>
             </p>
           </div>
 
@@ -92,11 +97,16 @@ const Index = () => {
 
           {/* Main Map Section */}
           <div className="jal-card-elevated p-0 overflow-hidden">
-            <div className="p-4 border-b border-border">
-              <h2 className="font-semibold text-foreground">Interactive Sensor Map</h2>
-              <p className="text-sm text-muted-foreground">
-                Click on sensor markers for detailed readings • Zoom for cluster expansion
-              </p>
+            <div className="p-4 border-b border-border flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Interactive Sensor Map</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Click markers for readings • Zoom to expand clusters
+                </p>
+              </div>
+              <div className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">
+                Layer: Sensor Network
+              </div>
             </div>
             <GroundwaterMap
               sensors={sensors}
@@ -108,21 +118,21 @@ const Index = () => {
 
           {/* District Quick Overview */}
           <div className="jal-card">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-foreground">District Overview</h2>
-              <span className="text-xs text-muted-foreground">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
+              <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">District Overview</h2>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
                 Click row for details
               </span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="professional-table">
                 <thead>
-                  <tr className="border-b border-border text-left">
-                    <th className="pb-3 font-medium text-muted-foreground">District</th>
-                    <th className="pb-3 font-medium text-muted-foreground text-center">Avg Depth</th>
-                    <th className="pb-3 font-medium text-muted-foreground text-center">Sensors</th>
-                    <th className="pb-3 font-medium text-muted-foreground text-center">30D Change</th>
-                    <th className="pb-3 font-medium text-muted-foreground text-center">Status</th>
+                  <tr>
+                    <th>District</th>
+                    <th className="text-center">Avg Depth</th>
+                    <th className="text-center">Sensors</th>
+                    <th className="text-center">30D Change</th>
+                    <th className="text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -130,11 +140,11 @@ const Index = () => {
                     <tr 
                       key={district.name}
                       onClick={() => handleDistrictClick(district)}
-                      className="border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors"
+                      className="cursor-pointer"
                     >
-                      <td className="py-3 font-medium text-foreground">{district.name}</td>
-                      <td className="py-3 text-center">
-                        <span className={`font-semibold ${
+                      <td className="font-medium text-foreground">{district.name}</td>
+                      <td className="text-center">
+                        <span className={`font-bold font-mono ${
                           district.riskLevel === 'critical' ? 'text-depth-critical' :
                           district.riskLevel === 'warning' ? 'text-depth-warning' :
                           district.riskLevel === 'moderate' ? 'text-depth-moderate' :
@@ -143,24 +153,24 @@ const Index = () => {
                           {district.avgDepth}m
                         </span>
                       </td>
-                      <td className="py-3 text-center text-muted-foreground">
+                      <td className="text-center text-muted-foreground font-mono">
                         {district.sensorCount}
                       </td>
-                      <td className="py-3 text-center">
-                        <span className={
+                      <td className="text-center">
+                        <span className={`font-mono font-medium ${
                           district.change30Days < 0 ? 'text-depth-critical' : 'text-depth-safe'
-                        }>
+                        }`}>
                           {district.change30Days > 0 ? '+' : ''}{district.change30Days}m
                         </span>
                       </td>
-                      <td className="py-3 text-center">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-white ${
+                      <td className="text-center">
+                        <span className={`badge-squared text-white text-[10px] ${
                           district.riskLevel === 'critical' ? 'bg-depth-critical' :
                           district.riskLevel === 'warning' ? 'bg-depth-warning' :
                           district.riskLevel === 'moderate' ? 'bg-depth-moderate' :
                           'bg-depth-safe'
                         }`}>
-                          {district.riskLevel.charAt(0).toUpperCase() + district.riskLevel.slice(1)}
+                          {district.riskLevel.toUpperCase()}
                         </span>
                       </td>
                     </tr>

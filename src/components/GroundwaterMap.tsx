@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, CircleMarker } from 'react-leaflet';
+import { useEffect, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Rectangle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { SensorReading, District, getDepthRiskLevel, getRiskColorClass } from '@/lib/mockData';
@@ -20,10 +20,7 @@ const DEFAULT_ZOOM = 7;
 // Custom hook to handle map events
 function MapController({ 
   sensors, 
-  districts,
-  onSensorClick,
-  onDistrictClick 
-}: GroundwaterMapProps) {
+}: { sensors: SensorReading[] }) {
   const map = useMap();
 
   useEffect(() => {
@@ -37,13 +34,33 @@ function MapController({
   return null;
 }
 
-// Risk level colors for markers
+// Risk level colors for markers - Professional palette
 const riskColors = {
-  safe: '#22c55e',
-  moderate: '#eab308',
-  warning: '#f97316',
-  critical: '#ef4444',
+  safe: '#2d8a5e',
+  moderate: '#d4940a',
+  warning: '#e86830',
+  critical: '#c43d3d',
 };
+
+// Create square marker icon
+function createSquareIcon(color: string, size: number = 12) {
+  return L.divIcon({
+    className: 'custom-square-marker',
+    html: `
+      <div style="
+        width: ${size}px;
+        height: ${size}px;
+        background-color: ${color};
+        border: 2px solid white;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        border-radius: 2px;
+        transform: rotate(45deg);
+      "></div>
+    `,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
 
 export function GroundwaterMap({ 
   sensors, 
@@ -67,121 +84,116 @@ export function GroundwaterMap({
       <MapContainer
         center={MAHARASHTRA_CENTER}
         zoom={DEFAULT_ZOOM}
-        className="h-full w-full rounded-lg"
+        className="h-full w-full"
         zoomControl={true}
+        style={{ borderRadius: '0.25rem' }}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
         
-        <MapController 
-          sensors={sensors}
-          districts={districts}
-          onSensorClick={onSensorClick}
-          onDistrictClick={onDistrictClick}
-        />
+        <MapController sensors={sensors} />
 
-        {/* Sensor Markers */}
+        {/* Sensor Markers - Square Design */}
         {sensors.map((sensor) => {
           const risk = getDepthRiskLevel(sensor.depth);
           const color = riskColors[risk];
+          const icon = createSquareIcon(color, 14);
 
           return (
-            <CircleMarker
+            <Marker
               key={sensor.id}
-              center={[sensor.lat, sensor.long]}
-              radius={8}
-              pathOptions={{
-                fillColor: color,
-                fillOpacity: 0.9,
-                color: '#fff',
-                weight: 2,
-              }}
+              position={[sensor.lat, sensor.long]}
+              icon={icon}
               eventHandlers={{
                 click: () => handleSensorClick(sensor),
               }}
             >
               <Popup>
-                <div className="min-w-[200px] p-1">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-sm">{sensor.deviceId}</span>
+                <div className="min-w-[220px] p-1">
+                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
+                    <span className="font-semibold text-sm text-foreground">{sensor.deviceId}</span>
                     <span className={cn(
-                      "px-2 py-0.5 rounded-full text-xs font-medium text-white",
+                      "badge-squared text-white",
                       getRiskColorClass(risk)
                     )}>
-                      {risk.charAt(0).toUpperCase() + risk.slice(1)}
+                      {risk.toUpperCase()}
                     </span>
                   </div>
-                  <div className="space-y-1 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">District:</span>
-                      <span className="font-medium">{sensor.district}</span>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">District</span>
+                      <span className="font-medium text-foreground">{sensor.district}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Depth:</span>
-                      <span className="font-bold text-lg">{sensor.depth}m</span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Depth</span>
+                      <span className="font-bold text-xl text-foreground">{sensor.depth}m</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Status:</span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Status</span>
                       <span className={cn(
-                        "font-medium",
+                        "font-medium flex items-center gap-1.5",
                         sensor.status === 'active' ? 'text-depth-safe' : 'text-muted-foreground'
                       )}>
-                        {sensor.status === 'active' ? '● Active' : '○ Offline'}
+                        <span className={cn(
+                          "w-1.5 h-1.5",
+                          sensor.status === 'active' ? 'bg-depth-safe' : 'bg-muted-foreground'
+                        )} style={{ borderRadius: '1px' }} />
+                        {sensor.status === 'active' ? 'Active' : 'Offline'}
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Last Sync:</span>
-                      <span className="font-medium">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Last Sync</span>
+                      <span className="font-medium font-mono text-foreground">
                         {new Date(sensor.lastSync).toLocaleTimeString()}
                       </span>
                     </div>
                   </div>
-                  <div className="mt-3 pt-2 border-t border-border">
+                  <div className="mt-3 pt-3 border-t border-border">
                     <button 
                       onClick={() => onSensorClick?.(sensor)}
-                      className="text-xs text-accent hover:underline font-medium"
+                      className="text-xs text-accent hover:text-accent/80 font-semibold uppercase tracking-wide transition-colors"
                     >
                       View Full Details →
                     </button>
                   </div>
                 </div>
               </Popup>
-            </CircleMarker>
+            </Marker>
           );
         })}
       </MapContainer>
 
-      {/* Map Legend */}
-      <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur-sm rounded-lg border border-border p-3 shadow-lg z-[1000]">
-        <h4 className="text-xs font-semibold text-foreground mb-2">Depth Classification</h4>
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="w-3 h-3 rounded-full bg-depth-safe" />
-            <span className="text-muted-foreground">0-5m Safe</span>
+      {/* Map Legend - Professional Squared Design */}
+      <div className="absolute bottom-4 left-4 bg-card/98 backdrop-blur-sm border border-border p-4 shadow-elevated z-[1000]" style={{ borderRadius: '0.25rem' }}>
+        <h4 className="text-xs font-semibold text-foreground mb-3 uppercase tracking-wider">Depth Classification</h4>
+        <div className="space-y-2">
+          <div className="flex items-center gap-3 text-xs">
+            <span className="w-3 h-3 bg-depth-safe" style={{ borderRadius: '2px', transform: 'rotate(45deg)' }} />
+            <span className="text-muted-foreground">0-5m <span className="font-medium text-foreground">Safe</span></span>
           </div>
-          <div className="flex items-center gap-2 text-xs">
-            <span className="w-3 h-3 rounded-full bg-depth-moderate" />
-            <span className="text-muted-foreground">5-10m Moderate</span>
+          <div className="flex items-center gap-3 text-xs">
+            <span className="w-3 h-3 bg-depth-moderate" style={{ borderRadius: '2px', transform: 'rotate(45deg)' }} />
+            <span className="text-muted-foreground">5-10m <span className="font-medium text-foreground">Moderate</span></span>
           </div>
-          <div className="flex items-center gap-2 text-xs">
-            <span className="w-3 h-3 rounded-full bg-depth-warning" />
-            <span className="text-muted-foreground">10-20m Warning</span>
+          <div className="flex items-center gap-3 text-xs">
+            <span className="w-3 h-3 bg-depth-warning" style={{ borderRadius: '2px', transform: 'rotate(45deg)' }} />
+            <span className="text-muted-foreground">10-20m <span className="font-medium text-foreground">Warning</span></span>
           </div>
-          <div className="flex items-center gap-2 text-xs">
-            <span className="w-3 h-3 rounded-full bg-depth-critical" />
-            <span className="text-muted-foreground">&gt;20m Critical</span>
+          <div className="flex items-center gap-3 text-xs">
+            <span className="w-3 h-3 bg-depth-critical" style={{ borderRadius: '2px', transform: 'rotate(45deg)' }} />
+            <span className="text-muted-foreground">&gt;20m <span className="font-medium text-foreground">Critical</span></span>
           </div>
         </div>
       </div>
 
-      {/* Sensor Count */}
-      <div className="absolute top-4 right-4 bg-card/95 backdrop-blur-sm rounded-lg border border-border px-3 py-2 shadow-lg z-[1000]">
+      {/* Sensor Count Badge - Squared */}
+      <div className="absolute top-4 right-4 bg-card/98 backdrop-blur-sm border border-border px-4 py-2 shadow-elevated z-[1000]" style={{ borderRadius: '0.25rem' }}>
         <div className="flex items-center gap-2 text-xs">
-          <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+          <span className="w-2 h-2 bg-accent" style={{ borderRadius: '1px' }} />
           <span className="text-muted-foreground">
-            <span className="font-semibold text-foreground">{sensors.length}</span> sensors active
+            <span className="font-bold text-foreground">{sensors.length}</span> sensors active
           </span>
         </div>
       </div>
