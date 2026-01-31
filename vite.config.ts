@@ -17,5 +17,7 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    // Prevent duplicate React instances (common cause of: "render2 is not a function")
+    dedupe: ["react", "react-dom", "react/jsx-runtime"],
   },
 }));
