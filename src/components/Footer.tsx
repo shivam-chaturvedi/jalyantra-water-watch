@@ -1,4 +1,4 @@
-import { Droplets, Shield, Clock, ExternalLink } from 'lucide-react';
+import { Droplets, Shield, Clock } from 'lucide-react';
 
 export function Footer() {
   return (
@@ -33,22 +33,8 @@ export function Footer() {
           </div>
 
           {/* Links */}
-          <div className="flex items-center gap-4 text-[10px] uppercase tracking-wide">
-            <a 
-              href="#" 
-              className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 font-medium"
-            >
-              Docs
-              <ExternalLink className="w-2.5 h-2.5" />
-            </a>
-            <a 
-              href="#" 
-              className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 font-medium"
-            >
-              API
-              <ExternalLink className="w-2.5 h-2.5" />
-            </a>
-            <span className="text-muted-foreground">© 2025</span>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            © 2026 JalYantra • All rights reserved
           </div>
         </div>
 

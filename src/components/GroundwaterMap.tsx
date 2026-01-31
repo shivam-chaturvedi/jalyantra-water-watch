@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, Rectangle } from 'react-leaflet';
+import { useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { SensorReading, District, getDepthRiskLevel, getRiskColorClass } from '@/lib/mockData';
+import { SensorReading, District, getDepthRiskLevel, getRiskColorClass } from '@/lib/data';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
+import { Crosshair } from 'lucide-react';
 
 interface GroundwaterMapProps {
   sensors: SensorReading[];
@@ -29,7 +30,7 @@ function MapController({
       const bounds = L.latLngBounds(sensors.map(s => [s.lat, s.long]));
       map.fitBounds(bounds, { padding: [50, 50] });
     }
-  }, []);
+  }, [map, sensors]);
 
   return null;
 }
@@ -68,7 +69,31 @@ export function GroundwaterMap({
   onSensorClick,
   onDistrictClick 
 }: GroundwaterMapProps) {
-  const [selectedSensor, setSelectedSensor] = useState<SensorReading | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+
+  const recenterMap = () => {
+    const map = mapRef.current;
+    if (!map || sensors.length === 0) return;
+
+    const latLngs = sensors
+      .map((sensor) => (typeof sensor.lat === 'number' && typeof sensor.long === 'number' ? [sensor.lat, sensor.long] as [number, number] : null))
+      .filter((coords): coords is [number, number] => coords !== null);
+
+    if (latLngs.length === 0) return;
+
+    map.invalidateSize();
+
+    const bounds = L.latLngBounds(latLngs);
+
+    if (bounds.isValid()) {
+      map.flyToBounds(bounds, { padding: [70, 70], duration: 0.8 });
+      return;
+    }
+
+    const avgLat = latLngs.reduce((sum, [lat]) => sum + lat, 0) / latLngs.length;
+    const avgLng = latLngs.reduce((sum, [, lng]) => sum + lng, 0) / latLngs.length;
+    map.flyTo([avgLat, avgLng], DEFAULT_ZOOM, { duration: 0.8 });
+  };
 
   const handleSensorClick = (sensor: SensorReading) => {
     setSelectedSensor(sensor);
@@ -87,6 +112,9 @@ export function GroundwaterMap({
         className="h-full w-full"
         zoomControl={true}
         style={{ borderRadius: '0.25rem' }}
+        whenCreated={(map) => {
+          mapRef.current = map;
+        }}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -164,6 +192,17 @@ export function GroundwaterMap({
           );
         })}
       </MapContainer>
+
+      {/* Recenter Button */}
+      <div className="absolute bottom-4 right-4 z-[1000]">
+        <button
+          onClick={recenterMap}
+          className="flex items-center gap-2 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wide rounded-full border border-border bg-card/90 text-foreground shadow-elevated hover:bg-card transition"
+        >
+          <Crosshair className="w-4 h-4" />
+          Recenter
+        </button>
+      </div>
 
       {/* Map Legend - Professional Squared Design */}
       <div className="absolute bottom-4 left-4 bg-card/98 backdrop-blur-sm border border-border p-4 shadow-elevated z-[1000]" style={{ borderRadius: '0.25rem' }}>

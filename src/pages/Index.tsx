@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavBar } from '@/components/NavBar';
 import { KPICards } from '@/components/KPICards';
 import { AlertsStrip } from '@/components/AlertsStrip';
@@ -7,8 +7,12 @@ import { DistrictPanel } from '@/components/DistrictPanel';
 import { SensorDetailModal } from '@/components/SensorDetailModal';
 import { Footer } from '@/components/Footer';
 import { useGroundwaterData } from '@/hooks/useGroundwaterData';
-import { SensorReading, District, Alert } from '@/lib/mockData';
+import { SensorReading, District, Alert } from '@/lib/data';
+import { downloadDataAsCsv } from '@/lib/csv';
 import { motion } from 'framer-motion';
+
+const LOCATION_ALL_KEY = 'all-locations';
+const DATE_ALL_KEY = 'all-dates';
 
 const Index = () => {
   const {
@@ -19,10 +23,8 @@ const Index = () => {
     isLoading,
     isLive,
     lastUpdated,
-    selectedState,
-    dateRange,
-    setSelectedState,
-    setDateRange,
+    availableLocations,
+    availableDates,
     setIsLive,
     refreshData,
   } = useGroundwaterData();
@@ -31,6 +33,23 @@ const Index = () => {
   const [selectedSensor, setSelectedSensor] = useState<SensorReading | null>(null);
   const [isDistrictPanelOpen, setIsDistrictPanelOpen] = useState(false);
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<string>(LOCATION_ALL_KEY);
+  const [selectedDate, setSelectedDate] = useState<string>(DATE_ALL_KEY);
+  const mapSectionRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (selectedLocation === LOCATION_ALL_KEY) return;
+    if (!availableLocations.includes(selectedLocation)) {
+      setSelectedLocation(LOCATION_ALL_KEY);
+    }
+  }, [availableLocations, selectedLocation]);
+
+  useEffect(() => {
+    if (selectedDate === DATE_ALL_KEY) return;
+    if (!availableDates.includes(selectedDate)) {
+      setSelectedDate(DATE_ALL_KEY);
+    }
+  }, [availableDates, selectedDate]);
 
   const handleSensorClick = (sensor: SensorReading) => {
     setSelectedSensor(sensor);
@@ -42,26 +61,80 @@ const Index = () => {
     setIsDistrictPanelOpen(true);
   };
 
+  const locationLabel = selectedLocation === LOCATION_ALL_KEY ? 'All Locations' : selectedLocation;
+
   const handleAlertClick = (alert: Alert) => {
     // Find the district associated with the alert
     const district = districts.find(d => d.name === alert.district);
     if (district) {
+      setSelectedLocation(alert.district);
       handleDistrictClick(district);
     }
   };
+
+  const locationFilter = selectedLocation === LOCATION_ALL_KEY ? null : selectedLocation;
+  const dateFilter = selectedDate === DATE_ALL_KEY ? null : selectedDate;
+
+  const filteredSensors = useMemo(() => {
+    return sensors.filter((sensor) => {
+      const matchesLocation = locationFilter ? sensor.district === locationFilter : true;
+      const matchesDate = dateFilter
+        ? sensor.history.some((point) => point.collectedDate === dateFilter)
+        : true;
+      return matchesLocation && matchesDate;
+    });
+  }, [sensors, locationFilter, dateFilter]);
+
+  const filteredDistricts = useMemo(() => {
+    if (!locationFilter) return districts;
+    return districts.filter((district) => district.name === locationFilter);
+  }, [districts, locationFilter]);
+
+  const filteredAlerts = useMemo(() => {
+    if (!locationFilter) return alerts;
+    return alerts.filter((alert) => alert.district === locationFilter);
+  }, [alerts, locationFilter]);
+
+  const handleViewAllSensors = useCallback(() => {
+    setSelectedLocation(LOCATION_ALL_KEY);
+    setSelectedDate(DATE_ALL_KEY);
+    setSelectedDistrict(null);
+    setIsDistrictPanelOpen(false);
+    mapSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
+
+  const handleExportAllSensors = useCallback(() => {
+    if (!filteredSensors.length) return;
+
+    downloadDataAsCsv(
+      'jalyantra-sensor-readings.csv',
+      filteredSensors.map((sensor) => ({
+        'Device ID': sensor.deviceId,
+        District: sensor.district,
+        Depth: sensor.depth,
+        Status: sensor.status,
+        'Last Sync': sensor.lastSync,
+        Latitude: sensor.lat,
+        Longitude: sensor.long,
+      }))
+    );
+  }, [filteredSensors]);
 
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation Bar */}
       <NavBar
-        selectedState={selectedState}
-        dateRange={dateRange}
+        selectedLocation={selectedLocation}
+        locationOptions={availableLocations}
+        selectedDate={selectedDate}
+        dateOptions={availableDates}
         isLive={isLive}
         lastUpdated={lastUpdated}
-        onStateChange={setSelectedState}
-        onDateRangeChange={setDateRange}
+        onLocationChange={setSelectedLocation}
+        onDateChange={setSelectedDate}
         onLiveToggle={setIsLive}
         onRefresh={refreshData}
+        onExport={handleExportAllSensors}
       />
 
       {/* Main Content */}
@@ -82,7 +155,7 @@ const Index = () => {
               </span>
             </div>
             <p className="text-sm text-muted-foreground">
-              Real-time IoT sensor analytics for <span className="font-semibold text-foreground">{selectedState}</span>
+              Real-time IoT sensor analytics for <span className="font-semibold text-foreground">{locationLabel}</span>
             </p>
           </div>
 
@@ -91,12 +164,12 @@ const Index = () => {
 
           {/* Alerts Strip */}
           <AlertsStrip 
-            alerts={alerts} 
+            alerts={filteredAlerts} 
             onAlertClick={handleAlertClick}
           />
 
           {/* Main Map Section */}
-          <div className="jal-card-elevated p-0 overflow-hidden">
+          <div ref={mapSectionRef} className="jal-card-elevated p-0 overflow-hidden">
             <div className="p-4 border-b border-border flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Interactive Sensor Map</h2>
@@ -109,8 +182,8 @@ const Index = () => {
               </div>
             </div>
             <GroundwaterMap
-              sensors={sensors}
-              districts={districts}
+              sensors={filteredSensors}
+              districts={filteredDistricts}
               onSensorClick={handleSensorClick}
               onDistrictClick={handleDistrictClick}
             />
@@ -136,7 +209,7 @@ const Index = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {districts.slice(0, 8).map((district) => (
+                  {filteredDistricts.slice(0, 8).map((district) => (
                     <tr 
                       key={district.name}
                       onClick={() => handleDistrictClick(district)}
@@ -186,11 +259,12 @@ const Index = () => {
       <Footer />
 
       {/* District Panel (Slide-in) */}
-      <DistrictPanel
-        district={selectedDistrict}
-        isOpen={isDistrictPanelOpen}
-        onClose={() => setIsDistrictPanelOpen(false)}
-      />
+        <DistrictPanel
+          district={selectedDistrict}
+          isOpen={isDistrictPanelOpen}
+          onClose={() => setIsDistrictPanelOpen(false)}
+          onViewAllSensors={handleViewAllSensors}
+        />
 
       {/* Sensor Detail Modal */}
       <SensorDetailModal

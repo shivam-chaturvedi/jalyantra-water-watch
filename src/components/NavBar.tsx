@@ -10,25 +10,31 @@ import {
 import { cn } from '@/lib/utils';
 
 interface NavBarProps {
-  selectedState: string;
-  dateRange: string;
+  selectedLocation: string;
+  locationOptions: string[];
+  selectedDate: string;
+  dateOptions: string[];
   isLive: boolean;
   lastUpdated: Date | null;
-  onStateChange: (state: string) => void;
-  onDateRangeChange: (range: string) => void;
+  onLocationChange: (location: string) => void;
+  onDateChange: (date: string) => void;
   onLiveToggle: (live: boolean) => void;
   onRefresh: () => void;
+  onExport?: () => void;
 }
 
 export function NavBar({
-  selectedState,
-  dateRange,
+  selectedLocation,
+  locationOptions,
+  selectedDate,
+  dateOptions,
   isLive,
   lastUpdated,
-  onStateChange,
-  onDateRangeChange,
+  onLocationChange,
+  onDateChange,
   onLiveToggle,
   onRefresh,
+  onExport,
 }: NavBarProps) {
   return (
     <nav className="nav-bar">
@@ -46,29 +52,33 @@ export function NavBar({
 
         {/* Controls */}
         <div className="flex items-center gap-2 sm:gap-2">
-          {/* State Selector */}
-          <Select value={selectedState} onValueChange={onStateChange}>
-            <SelectTrigger className="w-[130px] h-8 text-xs font-medium">
-              <SelectValue placeholder="Select State" />
+          {/* Location Selector */}
+          <Select value={selectedLocation} onValueChange={onLocationChange}>
+            <SelectTrigger className="w-[160px] h-8 text-xs font-medium">
+              <SelectValue placeholder="Select Location" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="Maharashtra">Maharashtra</SelectItem>
-              <SelectItem value="Gujarat">Gujarat</SelectItem>
-              <SelectItem value="Rajasthan">Rajasthan</SelectItem>
-              <SelectItem value="Karnataka">Karnataka</SelectItem>
+              <SelectItem value="all-locations">All Locations</SelectItem>
+              {locationOptions.map((location) => (
+                <SelectItem key={location} value={location}>
+                  {location}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
-          {/* Date Range */}
-          <Select value={dateRange} onValueChange={onDateRangeChange}>
-            <SelectTrigger className="w-[110px] h-8 text-xs font-medium hidden sm:flex">
-              <SelectValue placeholder="Date Range" />
+          {/* Date Selector */}
+          <Select value={selectedDate} onValueChange={onDateChange}>
+            <SelectTrigger className="w-[130px] h-8 text-xs font-medium hidden sm:flex">
+              <SelectValue placeholder="Date" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="last7">Last 7 Days</SelectItem>
-              <SelectItem value="last30">Last 30 Days</SelectItem>
-              <SelectItem value="seasonal">Seasonal</SelectItem>
-              <SelectItem value="yearly">This Year</SelectItem>
+              <SelectItem value="all-dates">All Dates</SelectItem>
+              {dateOptions.map((date) => (
+                <SelectItem key={date} value={date}>
+                  {date}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
@@ -103,7 +113,13 @@ export function NavBar({
           </Button>
 
           {/* Export */}
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs font-semibold uppercase tracking-wide hidden md:flex">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs font-semibold uppercase tracking-wide hidden md:flex"
+            onClick={onExport}
+            disabled={!onExport}
+          >
             <Download className="h-3.5 w-3.5" />
             Export
           </Button>

@@ -1,14 +1,17 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { get, onValue, ref } from 'firebase/database';
 import {
-  SensorReading,
-  District,
   Alert,
+  District,
   KPIStats,
-  generateAllSensorData,
+  SensorReading,
+  FirebaseReadings,
+  transformFirebaseReadings,
   calculateDistrictStats,
   generateAlerts,
   calculateKPIStats,
-} from '@/lib/mockData';
+} from '@/lib/data';
+import { database } from '@/lib/firebaseClient';
 
 interface UseGroundwaterDataReturn {
   sensors: SensorReading[];
@@ -18,10 +21,8 @@ interface UseGroundwaterDataReturn {
   isLoading: boolean;
   isLive: boolean;
   lastUpdated: Date | null;
-  selectedState: string;
-  dateRange: string;
-  setSelectedState: (state: string) => void;
-  setDateRange: (range: string) => void;
+  availableLocations: string[];
+  availableDates: string[];
   setIsLive: (live: boolean) => void;
   refreshData: () => void;
 }
@@ -34,47 +35,70 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [isLive, setIsLive] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [selectedState, setSelectedState] = useState('Maharashtra');
-  const [dateRange, setDateRange] = useState('last30');
+  const [availableLocations, setAvailableLocations] = useState<string[]>([]);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
 
-  const loadData = useCallback(() => {
-    setIsLoading(true);
-    
-    // Simulate API call delay
-    setTimeout(() => {
-      const sensorData = generateAllSensorData();
-      const districtData = calculateDistrictStats(sensorData);
-      const alertData = generateAlerts(districtData);
-      const kpiData = calculateKPIStats(sensorData, districtData);
-      
-      setSensors(sensorData);
-      setDistricts(districtData);
-      setAlerts(alertData);
-      setKpiStats(kpiData);
-      setLastUpdated(new Date());
-      setIsLoading(false);
-    }, 500);
+  const processSnapshot = useCallback((value: FirebaseReadings) => {
+    const sensorData = transformFirebaseReadings(value);
+    const districtData = calculateDistrictStats(sensorData);
+    const alertData = generateAlerts(districtData);
+    const kpiData = calculateKPIStats(sensorData, districtData);
+
+    setSensors(sensorData);
+    setDistricts(districtData);
+    setAlerts(alertData);
+    setKpiStats(kpiData);
+    setLastUpdated(new Date());
+    setIsLoading(false);
+
+    const locationSet = new Set(sensorData.map((sensor) => sensor.district));
+    setAvailableLocations(Array.from(locationSet).sort());
+
+    const dateSet = new Set<string>();
+    sensorData.forEach((sensor) => {
+      sensor.history.forEach((point) => {
+        if (point.collectedDate) {
+          dateSet.add(point.collectedDate);
+        }
+      });
+    });
+    setAvailableDates(
+      Array.from(dateSet)
+        .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+    );
   }, []);
 
-  // Initial load
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const fetchLatest = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const snapshot = await get(ref(database, 'readings'));
+      processSnapshot(snapshot.val());
+    } catch (error) {
+      console.error('Failed to fetch Firebase readings', error);
+      setIsLoading(false);
+    }
+  }, [processSnapshot]);
 
-  // Auto-refresh when live mode is enabled
+  useEffect(() => {
+    fetchLatest();
+  }, [fetchLatest]);
+
   useEffect(() => {
     if (!isLive) return;
-    
-    const interval = setInterval(() => {
-      loadData();
-    }, 30000); // Refresh every 30 seconds
-    
-    return () => clearInterval(interval);
-  }, [isLive, loadData]);
+
+    const readingsRef = ref(database, 'readings');
+    const unsubscribe = onValue(readingsRef, (snapshot) => {
+      processSnapshot(snapshot.val());
+    }, (error) => {
+      console.error('Realtime subscription error', error);
+    });
+
+    return () => unsubscribe();
+  }, [isLive, processSnapshot]);
 
   const refreshData = useCallback(() => {
-    loadData();
-  }, [loadData]);
+    fetchLatest();
+  }, [fetchLatest]);
 
   return {
     sensors,
@@ -84,10 +108,8 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
     isLoading,
     isLive,
     lastUpdated,
-    selectedState,
-    dateRange,
-    setSelectedState,
-    setDateRange,
+    availableLocations,
+    availableDates,
     setIsLive,
     refreshData,
   };

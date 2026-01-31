@@ -1,9 +1,10 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, MapPin, Activity, Clock, Download, Signal, Thermometer, BarChart3 } from 'lucide-react';
-import { SensorReading, getDepthRiskLevel, getRiskColorClass, getRiskTextColorClass } from '@/lib/mockData';
+import { SensorReading, getDepthRiskLevel, getRiskColorClass, getRiskTextColorClass } from '@/lib/data';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { downloadDataAsCsv } from '@/lib/csv';
 
 interface SensorDetailModalProps {
   sensor: SensorReading | null;
@@ -11,32 +12,37 @@ interface SensorDetailModalProps {
   onClose: () => void;
 }
 
-// Generate high-resolution depth readings for the sensor
-function generateSensorReadings(sensor: SensorReading) {
-  const data = [];
-  const baseDepth = sensor.depth;
-  
-  for (let i = 24; i >= 0; i--) {
-    const time = new Date();
-    time.setHours(time.getHours() - i);
-    const variation = (Math.random() - 0.5) * 0.5;
-    
-    data.push({
-      time: time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      depth: Math.round((baseDepth + variation) * 100) / 100,
-    });
-  }
-  
-  return data;
-}
-
 export function SensorDetailModal({ sensor, isOpen, onClose }: SensorDetailModalProps) {
   if (!sensor) return null;
 
   const risk = getDepthRiskLevel(sensor.depth);
-  const readings = generateSensorReadings(sensor);
+  const chartData = sensor.history.length
+    ? sensor.history.map((point) => ({
+        time: point.collectedDate,
+        depth: point.depth,
+      }))
+    : [{ time: sensor.collectedDate, depth: sensor.depth }];
   const lastSyncTime = new Date(sensor.lastSync);
   const hoursAgo = Math.round((Date.now() - lastSyncTime.getTime()) / (1000 * 60 * 60));
+
+  const handleDownloadHistory = () => {
+    const historyRows =
+      sensor.history.length > 0
+        ? sensor.history.map((point) => ({
+            Timestamp: new Date(point.timestamp).toISOString(),
+            Date: point.collectedDate,
+            Depth: point.depth,
+          }))
+        : [
+            {
+              Timestamp: sensor.lastSync,
+              Date: sensor.collectedDate,
+              Depth: sensor.depth,
+            },
+          ];
+
+    downloadDataAsCsv(`${sensor.deviceId}-history.csv`, historyRows);
+  };
 
   return (
     <AnimatePresence>
@@ -57,7 +63,7 @@ export function SensorDetailModal({ sensor, isOpen, onClose }: SensorDetailModal
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-card rounded-xl border border-border shadow-2xl z-50 overflow-hidden max-h-[90vh] overflow-y-auto"
+            className="fixed left-1/2 bottom-6 -translate-x-1/2 w-full max-w-3xl bg-card rounded-2xl border border-border shadow-2xl z-50 overflow-hidden max-h-[85vh] overflow-y-auto"
           >
             {/* Header */}
             <div className="gradient-header p-5 text-white">
@@ -160,7 +166,7 @@ export function SensorDetailModal({ sensor, isOpen, onClose }: SensorDetailModal
                 </div>
                 <div className="h-48">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={readings}>
+                    <LineChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis 
                         dataKey="time" 
@@ -223,7 +229,7 @@ export function SensorDetailModal({ sensor, isOpen, onClose }: SensorDetailModal
 
               {/* Actions */}
               <div className="flex gap-3">
-                <Button variant="outline" className="flex-1 gap-2">
+                <Button variant="outline" className="flex-1 gap-2" onClick={handleDownloadHistory}>
                   <Download className="w-4 h-4" />
                   Download CSV
                 </Button>

@@ -1,38 +1,56 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, MapPin, TrendingDown, TrendingUp, Activity, Calendar, Droplets, BarChart3 } from 'lucide-react';
-import { District, getRiskColorClass, getRiskTextColorClass } from '@/lib/mockData';
+import { X, MapPin, TrendingDown, TrendingUp, Activity, Droplets, BarChart3 } from 'lucide-react';
+import { District, getRiskColorClass, getRiskTextColorClass } from '@/lib/data';
+import { downloadDataAsCsv } from '@/lib/csv';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
 interface DistrictPanelProps {
   district: District | null;
   isOpen: boolean;
   onClose: () => void;
+  onViewAllSensors?: () => void;
 }
 
-// Mock trend data for the district
-function generateTrendData(district: District) {
-  const data = [];
-  const baseDepth = district.avgDepth;
-  
-  for (let i = 30; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    const variation = (Math.random() - 0.5) * 3;
-    
-    data.push({
-      date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      depth: Math.round((baseDepth + variation + (i * 0.05)) * 10) / 10,
-      rainfall: i > 20 ? 0 : Math.random() * 50,
-    });
-  }
-  
-  return data;
-}
+export function DistrictPanel({ district, isOpen, onClose, onViewAllSensors }: DistrictPanelProps) {
+  const trendData = district?.history ?? [];
+  const fallbackDate =
+    district?.history.at(-1)?.date ?? district?.history[0]?.date ?? '';
+  const fallbackRecord = {
+    avgDepth: district?.avgDepth ?? 0,
+    date: fallbackDate || '',
+  };
+  const highestRecord = trendData.length
+    ? trendData.reduce((best, point) => (point.avgDepth > best.avgDepth ? point : best), trendData[0])
+    : fallbackRecord;
+  const lowestRecord = trendData.length
+    ? trendData.reduce((best, point) => (point.avgDepth < best.avgDepth ? point : best), trendData[0])
+    : fallbackRecord;
 
-export function DistrictPanel({ district, isOpen, onClose }: DistrictPanelProps) {
-  const trendData = district ? generateTrendData(district) : [];
+  const handleDownloadReport = () => {
+    if (!district) return;
+
+    const rows =
+      district.history.length > 0
+        ? district.history
+        : [
+            {
+              date: new Date().toISOString().split('T')[0],
+              avgDepth: district.avgDepth,
+              sensors: district.sensorCount,
+            },
+          ];
+
+    downloadDataAsCsv(
+      `${district.name}-trend-report.csv`,
+      rows.map((point) => ({
+        Date: point.date,
+        'Average Depth (m)': point.avgDepth,
+        'Sensors Counted': point.sensors,
+      }))
+    );
+  };
 
   return (
     <AnimatePresence>
@@ -145,12 +163,13 @@ export function DistrictPanel({ district, isOpen, onClose }: DistrictPanelProps)
               {/* Depth Trend Chart */}
               <div className="jal-card">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-sm text-foreground">Depth Trend (30 Days)</h3>
-                  <div className="flex gap-1">
-                    <Button variant="secondary" size="sm" className="h-7 text-xs">30D</Button>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs">90D</Button>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs">1Y</Button>
+                  <div>
+                    <h3 className="font-semibold text-sm text-foreground">Depth Trend</h3>
+                    <p className="text-xs text-muted-foreground">Aggregated from sensor history</p>
                   </div>
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                    {trendData.length} data points
+                  </span>
                 </div>
                 <div className="h-48">
                   <ResponsiveContainer width="100%" height="100%">
@@ -162,30 +181,32 @@ export function DistrictPanel({ district, isOpen, onClose }: DistrictPanelProps)
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis 
-                        dataKey="date" 
+                      <XAxis
+                        dataKey="date"
                         tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                         tickLine={false}
                         axisLine={false}
                       />
-                      <YAxis 
+                      <YAxis
                         tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                         tickLine={false}
                         axisLine={false}
                         domain={['auto', 'auto']}
                         unit="m"
                       />
-                      <Tooltip 
+                      <Tooltip
                         contentStyle={{
                           backgroundColor: 'hsl(var(--card))',
                           border: '1px solid hsl(var(--border))',
                           borderRadius: '8px',
                           fontSize: '12px',
                         }}
+                        formatter={(value: number) => [`${value}m`, 'Avg Depth']}
+                        labelFormatter={(label) => `Date: ${label}`}
                       />
                       <Area
                         type="monotone"
-                        dataKey="depth"
+                        dataKey="avgDepth"
                         stroke="hsl(187, 72%, 40%)"
                         strokeWidth={2}
                         fill="url(#depthGradient)"
@@ -202,26 +223,36 @@ export function DistrictPanel({ district, isOpen, onClose }: DistrictPanelProps)
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">All-Time Highest</p>
                     <p className="text-lg font-bold text-depth-critical">
-                      {Math.round((district.avgDepth + 8) * 10) / 10}m
+                      {highestRecord.avgDepth}m
                     </p>
-                    <p className="text-xs text-muted-foreground">May 2024</p>
+                    <p className="text-xs text-muted-foreground">
+                      {highestRecord.date || 'Latest'}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">All-Time Lowest</p>
                     <p className="text-lg font-bold text-depth-safe">
-                      {Math.round((district.avgDepth - 6) * 10) / 10}m
+                      {lowestRecord.avgDepth}m
                     </p>
-                    <p className="text-xs text-muted-foreground">Sep 2023</p>
+                    <p className="text-xs text-muted-foreground">
+                      {lowestRecord.date || 'Latest'}
+                    </p>
                   </div>
                 </div>
               </div>
 
               {/* Actions */}
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1">
+                <Button variant="outline" className="flex-1" onClick={handleDownloadReport}>
                   Download Report
                 </Button>
-                <Button className="flex-1 bg-accent hover:bg-accent/90">
+                <Button
+                  className="flex-1 bg-accent hover:bg-accent/90"
+                  onClick={() => {
+                    onViewAllSensors?.();
+                    onClose();
+                  }}
+                >
                   View All Sensors
                 </Button>
               </div>

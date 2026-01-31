@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { Activity, Waves, AlertTriangle, TrendingDown, LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { KPIStats } from '@/lib/mockData';
+import { KPIStats } from '@/lib/data';
 
 interface KPICardsProps {
   stats: KPIStats | null;
