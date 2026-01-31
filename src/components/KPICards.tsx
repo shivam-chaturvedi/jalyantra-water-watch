@@ -1,0 +1,137 @@
+import { motion } from 'framer-motion';
+import { Activity, Waves, AlertTriangle, TrendingDown, LucideIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { KPIStats } from '@/lib/mockData';
+
+interface KPICardsProps {
+  stats: KPIStats | null;
+  isLoading: boolean;
+}
+
+interface KPICardProps {
+  title: string;
+  value: string | number;
+  subtitle: string;
+  icon: LucideIcon;
+  trend?: 'up' | 'down' | 'neutral';
+  trendValue?: string;
+  variant?: 'default' | 'warning' | 'critical' | 'accent';
+  delay?: number;
+}
+
+function KPICard({ 
+  title, 
+  value, 
+  subtitle, 
+  icon: Icon, 
+  trend, 
+  trendValue,
+  variant = 'default',
+  delay = 0 
+}: KPICardProps) {
+  const variantStyles = {
+    default: 'border-border',
+    warning: 'border-depth-warning/30 bg-depth-warning/5',
+    critical: 'border-depth-critical/30 bg-depth-critical/5',
+    accent: 'border-accent/30 bg-accent/5',
+  };
+
+  const iconStyles = {
+    default: 'bg-secondary text-foreground',
+    warning: 'bg-depth-warning/20 text-depth-warning',
+    critical: 'bg-depth-critical/20 text-depth-critical',
+    accent: 'bg-accent/20 text-accent',
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay }}
+      className={cn("kpi-card", variantStyles[variant])}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", iconStyles[variant])}>
+          <Icon className="w-5 h-5" />
+        </div>
+        {trend && trendValue && (
+          <div className={cn(
+            "flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full",
+            trend === 'down' ? 'bg-depth-critical/10 text-depth-critical' : 
+            trend === 'up' ? 'bg-depth-safe/10 text-depth-safe' : 
+            'bg-muted text-muted-foreground'
+          )}>
+            <TrendingDown className={cn("w-3 h-3", trend === 'up' && "rotate-180")} />
+            {trendValue}
+          </div>
+        )}
+      </div>
+      
+      <div className="space-y-1">
+        <p className="text-sm text-muted-foreground font-medium">{title}</p>
+        <p className="text-3xl font-bold text-foreground tracking-tight">{value}</p>
+        <p className="text-xs text-muted-foreground">{subtitle}</p>
+      </div>
+    </motion.div>
+  );
+}
+
+export function KPICards({ stats, isLoading }: KPICardsProps) {
+  if (isLoading || !stats) {
+    return (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="kpi-card animate-pulse">
+            <div className="w-10 h-10 rounded-lg bg-muted mb-3" />
+            <div className="space-y-2">
+              <div className="h-4 w-24 bg-muted rounded" />
+              <div className="h-8 w-16 bg-muted rounded" />
+              <div className="h-3 w-32 bg-muted rounded" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <KPICard
+        title="Active Sensors"
+        value={stats.activeSensors}
+        subtitle="Connected and reporting"
+        icon={Activity}
+        variant="accent"
+        delay={0}
+      />
+      <KPICard
+        title="Average Depth"
+        value={`${stats.avgDepth}m`}
+        subtitle="State-wide average"
+        icon={Waves}
+        trend={stats.avgDepth > 15 ? 'down' : 'neutral'}
+        trendValue={stats.avgDepth > 15 ? 'High' : 'Normal'}
+        variant={stats.avgDepth > 15 ? 'warning' : 'default'}
+        delay={0.1}
+      />
+      <KPICard
+        title="Critical Districts"
+        value={`${stats.criticalPercentage}%`}
+        subtitle="Above 20m depth threshold"
+        icon={AlertTriangle}
+        variant={stats.criticalPercentage > 20 ? 'critical' : 'default'}
+        delay={0.2}
+      />
+      <KPICard
+        title="Fastest Decline"
+        value={stats.fastestDecliningDistrict}
+        subtitle={`-${stats.fastestDeclineRate}m in 30 days`}
+        icon={TrendingDown}
+        trend="down"
+        trendValue={`-${stats.fastestDeclineRate}m`}
+        variant="critical"
+        delay={0.3}
+      />
+    </div>
+  );
+}

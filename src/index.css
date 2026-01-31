@@ -2,95 +2,108 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
+    /* JalYantra Design System - Government-Grade Water Intelligence */
+    
+    /* Core Background & Surfaces */
+    --background: 210 25% 97%;
+    --foreground: 215 28% 17%;
+    
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
+    --card-foreground: 215 28% 17%;
+    
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
+    --popover-foreground: 215 28% 17%;
+    
+    /* Primary - Deep Navy (Authority & Trust) */
+    --primary: 215 50% 23%;
+    --primary-foreground: 0 0% 100%;
+    
+    /* Secondary - Soft Blue-Gray */
+    --secondary: 210 20% 93%;
+    --secondary-foreground: 215 28% 17%;
+    
+    /* Muted Elements */
+    --muted: 210 15% 94%;
+    --muted-foreground: 215 15% 50%;
+    
+    /* Accent - Teal Water Theme */
+    --accent: 187 72% 40%;
+    --accent-foreground: 0 0% 100%;
+    
+    /* Semantic Status Colors */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Groundwater Depth Risk Levels */
+    --depth-safe: 142 71% 45%;
+    --depth-moderate: 48 96% 53%;
+    --depth-warning: 25 95% 53%;
+    --depth-critical: 0 72% 51%;
+    
+    /* Borders & Inputs */
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 187 72% 40%;
+    
     --radius: 0.5rem;
-
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    
+    /* Shadows */
+    --shadow-card: 0 2px 8px -2px hsl(215 28% 17% / 0.08), 0 4px 16px -4px hsl(215 28% 17% / 0.06);
+    --shadow-elevated: 0 4px 12px -2px hsl(215 28% 17% / 0.12), 0 8px 24px -8px hsl(215 28% 17% / 0.1);
+    --shadow-map: 0 0 0 2px hsl(var(--border)), 0 8px 32px -8px hsl(215 28% 17% / 0.2);
+    
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 215 28% 17%;
+    --sidebar-primary: 215 50% 23%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 20% 96%;
+    --sidebar-accent-foreground: 215 28% 17%;
+    --sidebar-border: 214 20% 88%;
+    --sidebar-ring: 187 72% 40%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --background: 215 28% 10%;
+    --foreground: 210 20% 95%;
+    
+    --card: 215 25% 14%;
+    --card-foreground: 210 20% 95%;
+    
+    --popover: 215 25% 14%;
+    --popover-foreground: 210 20% 95%;
+    
+    --primary: 187 72% 50%;
+    --primary-foreground: 215 28% 10%;
+    
+    --secondary: 215 25% 18%;
+    --secondary-foreground: 210 20% 95%;
+    
+    --muted: 215 25% 18%;
+    --muted-foreground: 215 15% 60%;
+    
+    --accent: 187 72% 50%;
+    --accent-foreground: 215 28% 10%;
+    
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 215 25% 22%;
+    --input: 215 25% 22%;
+    --ring: 187 72% 50%;
+    
+    --sidebar-background: 215 28% 12%;
+    --sidebar-foreground: 210 20% 95%;
+    --sidebar-primary: 187 72% 50%;
+    --sidebar-primary-foreground: 215 28% 10%;
+    --sidebar-accent: 215 25% 18%;
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 215 25% 22%;
+    --sidebar-ring: 187 72% 50%;
   }
 }
 
@@ -98,8 +111,163 @@ All colors MUST be HSL.
   * {
     @apply border-border;
   }
-
+  
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
   }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+  
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer components {
+  /* Squared Card Design */
+  .jal-card {
+    @apply bg-card rounded-lg border border-border p-5;
+    box-shadow: var(--shadow-card);
+  }
+  
+  .jal-card-elevated {
+    @apply bg-card rounded-lg border border-border p-5;
+    box-shadow: var(--shadow-elevated);
+  }
+  
+  /* KPI Card Styling */
+  .kpi-card {
+    @apply bg-card rounded-lg border border-border p-5 transition-all duration-200;
+    box-shadow: var(--shadow-card);
+  }
+  
+  .kpi-card:hover {
+    box-shadow: var(--shadow-elevated);
+    transform: translateY(-2px);
+  }
+  
+  /* Map Container */
+  .map-container {
+    @apply rounded-lg overflow-hidden border border-border;
+    box-shadow: var(--shadow-map);
+  }
+  
+  /* Status Indicators */
+  .status-safe { @apply bg-depth-safe text-white; }
+  .status-moderate { @apply bg-depth-moderate text-white; }
+  .status-warning { @apply bg-depth-warning text-white; }
+  .status-critical { @apply bg-depth-critical text-white; }
+  
+  /* Alert Strip */
+  .alert-strip {
+    @apply flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium;
+  }
+  
+  /* Live Indicator Pulse */
+  .live-pulse {
+    @apply relative;
+  }
+  
+  .live-pulse::before {
+    content: '';
+    @apply absolute inset-0 rounded-full animate-ping opacity-75;
+    background-color: inherit;
+  }
+  
+  /* Navigation Bar */
+  .nav-bar {
+    @apply fixed top-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border;
+    box-shadow: 0 1px 3px 0 hsl(215 28% 17% / 0.05);
+  }
+  
+  /* Gradient Overlays */
+  .gradient-water {
+    background: linear-gradient(135deg, hsl(187 72% 40%) 0%, hsl(215 50% 35%) 100%);
+  }
+  
+  .gradient-header {
+    background: linear-gradient(90deg, hsl(215 50% 23%) 0%, hsl(215 45% 30%) 100%);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  /* Depth Risk Colors */
+  .bg-depth-safe { background-color: hsl(var(--depth-safe)); }
+  .bg-depth-moderate { background-color: hsl(var(--depth-moderate)); }
+  .bg-depth-warning { background-color: hsl(var(--depth-warning)); }
+  .bg-depth-critical { background-color: hsl(var(--depth-critical)); }
+  
+  .text-depth-safe { color: hsl(var(--depth-safe)); }
+  .text-depth-moderate { color: hsl(var(--depth-moderate)); }
+  .text-depth-warning { color: hsl(var(--depth-warning)); }
+  .text-depth-critical { color: hsl(var(--depth-critical)); }
+  
+  .border-depth-safe { border-color: hsl(var(--depth-safe)); }
+  .border-depth-moderate { border-color: hsl(var(--depth-moderate)); }
+  .border-depth-warning { border-color: hsl(var(--depth-warning)); }
+  .border-depth-critical { border-color: hsl(var(--depth-critical)); }
+}
+
+/* Leaflet Custom Styles */
+.leaflet-container {
+  font-family: 'Inter', system-ui, sans-serif;
+  z-index: 1;
+}
+
+.leaflet-popup-content-wrapper {
+  @apply rounded-lg shadow-lg;
+  box-shadow: var(--shadow-elevated);
+}
+
+.leaflet-popup-content {
+  margin: 12px 16px;
+}
+
+.leaflet-control-zoom {
+  @apply border-none shadow-lg rounded-lg overflow-hidden;
+  box-shadow: var(--shadow-card) !important;
+}
+
+.leaflet-control-zoom a {
+  @apply bg-card text-foreground border-b border-border;
+}
+
+.leaflet-control-zoom a:hover {
+  @apply bg-secondary;
+}
+
+/* Custom Marker Styles */
+.sensor-marker {
+  @apply rounded-full border-2 border-white shadow-lg;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.cluster-marker {
+  @apply rounded-full flex items-center justify-center font-semibold text-white border-2 border-white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-muted rounded-full;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/30 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/50;
 }
