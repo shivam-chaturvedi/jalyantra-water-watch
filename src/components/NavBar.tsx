@@ -1,4 +1,4 @@
-import { Droplets, RefreshCw, Download, ChevronDown, Radio } from 'lucide-react';
+import { Droplets, RefreshCw, Download, Radio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -33,22 +33,22 @@ export function NavBar({
   return (
     <nav className="nav-bar">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
-        {/* Logo & Brand */}
+        {/* Logo & Brand - Squared Professional */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg gradient-water flex items-center justify-center">
-            <Droplets className="w-6 h-6 text-white" />
+          <div className="w-10 h-10 gradient-water flex items-center justify-center" style={{ borderRadius: '0.25rem' }}>
+            <Droplets className="w-5 h-5 text-white" />
           </div>
           <div className="hidden sm:block">
-            <h1 className="text-lg font-bold text-foreground">JalYantra</h1>
-            <p className="text-xs text-muted-foreground -mt-0.5">Groundwater Intelligence</p>
+            <h1 className="text-base font-bold text-foreground tracking-tight">JALYANTRA</h1>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest -mt-0.5">Groundwater Intelligence</p>
           </div>
         </div>
 
         {/* Controls */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-2">
           {/* State Selector */}
           <Select value={selectedState} onValueChange={onStateChange}>
-            <SelectTrigger className="w-[140px] h-9 text-sm">
+            <SelectTrigger className="w-[130px] h-8 text-xs font-medium">
               <SelectValue placeholder="Select State" />
             </SelectTrigger>
             <SelectContent>
@@ -61,7 +61,7 @@ export function NavBar({
 
           {/* Date Range */}
           <Select value={dateRange} onValueChange={onDateRangeChange}>
-            <SelectTrigger className="w-[130px] h-9 text-sm hidden sm:flex">
+            <SelectTrigger className="w-[110px] h-8 text-xs font-medium hidden sm:flex">
               <SelectValue placeholder="Date Range" />
             </SelectTrigger>
             <SelectContent>
@@ -72,36 +72,39 @@ export function NavBar({
             </SelectContent>
           </Select>
 
+          {/* Separator */}
+          <div className="hidden sm:block w-px h-6 bg-border mx-1" />
+
           {/* Live Toggle */}
           <Button
             variant={isLive ? "default" : "outline"}
             size="sm"
             onClick={() => onLiveToggle(!isLive)}
             className={cn(
-              "h-9 gap-2 text-sm font-medium",
+              "h-8 gap-2 text-xs font-semibold uppercase tracking-wide",
               isLive && "bg-accent hover:bg-accent/90"
             )}
           >
-            <span className="relative flex h-2 w-2">
+            <span className="relative flex h-1.5 w-1.5">
               {isLive && (
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-foreground opacity-75" />
+                <span className="animate-ping absolute inline-flex h-full w-full bg-accent-foreground opacity-75" style={{ borderRadius: '1px' }} />
               )}
               <span className={cn(
-                "relative inline-flex rounded-full h-2 w-2",
+                "relative inline-flex h-1.5 w-1.5",
                 isLive ? "bg-accent-foreground" : "bg-muted-foreground"
-              )} />
+              )} style={{ borderRadius: '1px' }} />
             </span>
             <span className="hidden sm:inline">Live</span>
           </Button>
 
           {/* Refresh */}
-          <Button variant="outline" size="icon" className="h-9 w-9" onClick={onRefresh}>
-            <RefreshCw className="h-4 w-4" />
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={onRefresh}>
+            <RefreshCw className="h-3.5 w-3.5" />
           </Button>
 
           {/* Export */}
-          <Button variant="outline" size="sm" className="h-9 gap-2 hidden md:flex">
-            <Download className="h-4 w-4" />
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs font-semibold uppercase tracking-wide hidden md:flex">
+            <Download className="h-3.5 w-3.5" />
             Export
           </Button>
         </div>
@@ -109,10 +112,10 @@ export function NavBar({
 
       {/* Last Updated Strip */}
       {lastUpdated && (
-        <div className="border-t border-border bg-muted/50 px-4 py-1.5">
-          <div className="container mx-auto flex items-center justify-between text-xs text-muted-foreground">
-            <span>
-              Last updated: {lastUpdated.toLocaleTimeString()}
+        <div className="border-t border-border bg-muted/30 px-4 py-1">
+          <div className="container mx-auto flex items-center justify-between text-[10px] text-muted-foreground uppercase tracking-wide">
+            <span className="font-medium">
+              Last Sync: <span className="font-mono text-foreground">{lastUpdated.toLocaleTimeString()}</span>
             </span>
             <span className="flex items-center gap-1.5">
               <Radio className="h-3 w-3 text-accent" />

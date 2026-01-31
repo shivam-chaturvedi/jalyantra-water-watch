@@ -2,108 +2,108 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 @layer base {
   :root {
-    /* JalYantra Design System - Government-Grade Water Intelligence */
+    /* JalYantra Professional Design System - Premium Government Intelligence */
     
-    /* Core Background & Surfaces */
-    --background: 210 25% 97%;
-    --foreground: 215 28% 17%;
+    /* Core Background & Surfaces - Warm Slate Tones */
+    --background: 220 14% 96%;
+    --foreground: 220 30% 12%;
     
     --card: 0 0% 100%;
-    --card-foreground: 215 28% 17%;
+    --card-foreground: 220 30% 12%;
     
     --popover: 0 0% 100%;
-    --popover-foreground: 215 28% 17%;
+    --popover-foreground: 220 30% 12%;
     
-    /* Primary - Deep Navy (Authority & Trust) */
-    --primary: 215 50% 23%;
+    /* Primary - Deep Charcoal Blue (Authority & Precision) */
+    --primary: 220 35% 18%;
     --primary-foreground: 0 0% 100%;
     
-    /* Secondary - Soft Blue-Gray */
-    --secondary: 210 20% 93%;
-    --secondary-foreground: 215 28% 17%;
+    /* Secondary - Cool Stone */
+    --secondary: 220 12% 91%;
+    --secondary-foreground: 220 30% 12%;
     
     /* Muted Elements */
-    --muted: 210 15% 94%;
-    --muted-foreground: 215 15% 50%;
+    --muted: 220 10% 93%;
+    --muted-foreground: 220 12% 45%;
     
-    /* Accent - Teal Water Theme */
-    --accent: 187 72% 40%;
+    /* Accent - Deep Teal (Professional Water Theme) */
+    --accent: 192 65% 32%;
     --accent-foreground: 0 0% 100%;
     
     /* Semantic Status Colors */
-    --destructive: 0 72% 51%;
+    --destructive: 0 65% 48%;
     --destructive-foreground: 0 0% 100%;
     
-    /* Groundwater Depth Risk Levels */
-    --depth-safe: 142 71% 45%;
-    --depth-moderate: 48 96% 53%;
-    --depth-warning: 25 95% 53%;
-    --depth-critical: 0 72% 51%;
+    /* Groundwater Depth Risk Levels - Refined Palette */
+    --depth-safe: 152 55% 38%;
+    --depth-moderate: 42 85% 48%;
+    --depth-warning: 24 85% 50%;
+    --depth-critical: 0 65% 48%;
     
     /* Borders & Inputs */
-    --border: 214 20% 88%;
-    --input: 214 20% 88%;
-    --ring: 187 72% 40%;
+    --border: 220 15% 85%;
+    --input: 220 15% 85%;
+    --ring: 192 65% 32%;
     
-    --radius: 0.5rem;
+    --radius: 0.25rem;
     
-    /* Shadows */
-    --shadow-card: 0 2px 8px -2px hsl(215 28% 17% / 0.08), 0 4px 16px -4px hsl(215 28% 17% / 0.06);
-    --shadow-elevated: 0 4px 12px -2px hsl(215 28% 17% / 0.12), 0 8px 24px -8px hsl(215 28% 17% / 0.1);
-    --shadow-map: 0 0 0 2px hsl(var(--border)), 0 8px 32px -8px hsl(215 28% 17% / 0.2);
+    /* Professional Shadows */
+    --shadow-card: 0 1px 3px 0 hsl(220 30% 12% / 0.04), 0 2px 8px -2px hsl(220 30% 12% / 0.06);
+    --shadow-elevated: 0 4px 6px -1px hsl(220 30% 12% / 0.08), 0 8px 16px -4px hsl(220 30% 12% / 0.08);
+    --shadow-map: 0 0 0 1px hsl(var(--border)), 0 4px 24px -8px hsl(220 30% 12% / 0.15);
     
     /* Sidebar */
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 215 28% 17%;
-    --sidebar-primary: 215 50% 23%;
+    --sidebar-foreground: 220 30% 12%;
+    --sidebar-primary: 220 35% 18%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 20% 96%;
-    --sidebar-accent-foreground: 215 28% 17%;
-    --sidebar-border: 214 20% 88%;
-    --sidebar-ring: 187 72% 40%;
+    --sidebar-accent: 220 12% 95%;
+    --sidebar-accent-foreground: 220 30% 12%;
+    --sidebar-border: 220 15% 85%;
+    --sidebar-ring: 192 65% 32%;
   }
 
   .dark {
-    --background: 215 28% 10%;
-    --foreground: 210 20% 95%;
+    --background: 220 25% 8%;
+    --foreground: 220 15% 92%;
     
-    --card: 215 25% 14%;
-    --card-foreground: 210 20% 95%;
+    --card: 220 22% 12%;
+    --card-foreground: 220 15% 92%;
     
-    --popover: 215 25% 14%;
-    --popover-foreground: 210 20% 95%;
+    --popover: 220 22% 12%;
+    --popover-foreground: 220 15% 92%;
     
-    --primary: 187 72% 50%;
-    --primary-foreground: 215 28% 10%;
+    --primary: 192 55% 45%;
+    --primary-foreground: 220 25% 8%;
     
-    --secondary: 215 25% 18%;
-    --secondary-foreground: 210 20% 95%;
+    --secondary: 220 20% 16%;
+    --secondary-foreground: 220 15% 92%;
     
-    --muted: 215 25% 18%;
-    --muted-foreground: 215 15% 60%;
+    --muted: 220 20% 16%;
+    --muted-foreground: 220 12% 55%;
     
-    --accent: 187 72% 50%;
-    --accent-foreground: 215 28% 10%;
+    --accent: 192 55% 45%;
+    --accent-foreground: 220 25% 8%;
     
-    --destructive: 0 62% 50%;
+    --destructive: 0 55% 45%;
     --destructive-foreground: 0 0% 100%;
     
-    --border: 215 25% 22%;
-    --input: 215 25% 22%;
-    --ring: 187 72% 50%;
+    --border: 220 20% 20%;
+    --input: 220 20% 20%;
+    --ring: 192 55% 45%;
     
-    --sidebar-background: 215 28% 12%;
-    --sidebar-foreground: 210 20% 95%;
-    --sidebar-primary: 187 72% 50%;
-    --sidebar-primary-foreground: 215 28% 10%;
-    --sidebar-accent: 215 25% 18%;
-    --sidebar-accent-foreground: 210 20% 95%;
-    --sidebar-border: 215 25% 22%;
-    --sidebar-ring: 187 72% 50%;
+    --sidebar-background: 220 25% 10%;
+    --sidebar-foreground: 220 15% 92%;
+    --sidebar-primary: 192 55% 45%;
+    --sidebar-primary-foreground: 220 25% 8%;
+    --sidebar-accent: 220 20% 16%;
+    --sidebar-accent-foreground: 220 15% 92%;
+    --sidebar-border: 220 20% 20%;
+    --sidebar-ring: 192 55% 45%;
   }
 }
 
@@ -113,49 +113,55 @@
   }
   
   body {
-    @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Inter', system-ui, sans-serif;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
   
   h1, h2, h3, h4, h5, h6 {
     @apply font-semibold tracking-tight;
+    letter-spacing: -0.01em;
   }
   
   .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
   }
 }
 
 @layer components {
-  /* Squared Card Design */
+  /* Professional Squared Card Design */
   .jal-card {
-    @apply bg-card rounded-lg border border-border p-5;
+    @apply bg-card border border-border p-5;
+    border-radius: var(--radius);
     box-shadow: var(--shadow-card);
   }
   
   .jal-card-elevated {
-    @apply bg-card rounded-lg border border-border p-5;
+    @apply bg-card border border-border p-5;
+    border-radius: var(--radius);
     box-shadow: var(--shadow-elevated);
   }
   
-  /* KPI Card Styling */
+  /* KPI Card Styling - Sharp Corners */
   .kpi-card {
-    @apply bg-card rounded-lg border border-border p-5 transition-all duration-200;
+    @apply bg-card border border-border p-5 transition-all duration-200;
+    border-radius: var(--radius);
     box-shadow: var(--shadow-card);
   }
   
   .kpi-card:hover {
     box-shadow: var(--shadow-elevated);
-    transform: translateY(-2px);
+    transform: translateY(-1px);
   }
   
-  /* Map Container */
+  /* Map Container - Clean Border */
   .map-container {
-    @apply rounded-lg overflow-hidden border border-border;
+    @apply overflow-hidden border border-border;
+    border-radius: var(--radius);
     box-shadow: var(--shadow-map);
   }
   
-  /* Status Indicators */
+  /* Status Indicators - Squared Pills */
   .status-safe { @apply bg-depth-safe text-white; }
   .status-moderate { @apply bg-depth-moderate text-white; }
   .status-warning { @apply bg-depth-warning text-white; }
@@ -163,33 +169,42 @@
   
   /* Alert Strip */
   .alert-strip {
-    @apply flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium;
+    @apply flex items-center gap-2 px-4 py-2 text-sm font-medium;
+    border-radius: var(--radius);
   }
   
-  /* Live Indicator Pulse */
-  .live-pulse {
-    @apply relative;
-  }
-  
-  .live-pulse::before {
-    content: '';
-    @apply absolute inset-0 rounded-full animate-ping opacity-75;
-    background-color: inherit;
-  }
-  
-  /* Navigation Bar */
+  /* Navigation Bar - Crisp Edge */
   .nav-bar {
-    @apply fixed top-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border;
-    box-shadow: 0 1px 3px 0 hsl(215 28% 17% / 0.05);
+    @apply fixed top-0 left-0 right-0 z-50 backdrop-blur-sm border-b border-border;
+    background-color: hsl(var(--card) / 0.98);
+    box-shadow: 0 1px 2px 0 hsl(220 30% 12% / 0.03);
   }
   
-  /* Gradient Overlays */
+  /* Professional Gradients */
   .gradient-water {
-    background: linear-gradient(135deg, hsl(187 72% 40%) 0%, hsl(215 50% 35%) 100%);
+    background: linear-gradient(135deg, hsl(192 65% 32%) 0%, hsl(220 35% 25%) 100%);
   }
   
   .gradient-header {
-    background: linear-gradient(90deg, hsl(215 50% 23%) 0%, hsl(215 45% 30%) 100%);
+    background: linear-gradient(90deg, hsl(220 35% 18%) 0%, hsl(220 30% 24%) 100%);
+  }
+
+  /* Data Grid Styling */
+  .data-grid {
+    @apply border border-border overflow-hidden;
+    border-radius: var(--radius);
+  }
+
+  .data-grid-header {
+    @apply bg-muted/50 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground;
+  }
+
+  .data-grid-row {
+    @apply border-b border-border px-4 py-3 transition-colors hover:bg-muted/30;
+  }
+
+  .data-grid-row:last-child {
+    @apply border-b-0;
   }
 }
 
@@ -213,61 +228,117 @@
   .border-depth-moderate { border-color: hsl(var(--depth-moderate)); }
   .border-depth-warning { border-color: hsl(var(--depth-warning)); }
   .border-depth-critical { border-color: hsl(var(--depth-critical)); }
+
+  /* Squared badge utility */
+  .badge-squared {
+    @apply inline-flex items-center px-2 py-0.5 text-xs font-semibold tracking-wide uppercase;
+    border-radius: var(--radius);
+  }
 }
 
-/* Leaflet Custom Styles */
+/* Leaflet Custom Styles - Professional Theme */
 .leaflet-container {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
   z-index: 1;
+  background-color: hsl(220 14% 96%);
 }
 
 .leaflet-popup-content-wrapper {
-  @apply rounded-lg shadow-lg;
-  box-shadow: var(--shadow-elevated);
+  border-radius: var(--radius) !important;
+  box-shadow: var(--shadow-elevated) !important;
+  border: 1px solid hsl(var(--border)) !important;
 }
 
 .leaflet-popup-content {
   margin: 12px 16px;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+}
+
+.leaflet-popup-tip {
+  background: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  box-shadow: none !important;
 }
 
 .leaflet-control-zoom {
-  @apply border-none shadow-lg rounded-lg overflow-hidden;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: var(--radius) !important;
+  overflow: hidden;
   box-shadow: var(--shadow-card) !important;
 }
 
 .leaflet-control-zoom a {
-  @apply bg-card text-foreground border-b border-border;
+  background: hsl(var(--card)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+  width: 32px !important;
+  height: 32px !important;
+  line-height: 32px !important;
+  font-weight: 500 !important;
+}
+
+.leaflet-control-zoom a:last-child {
+  border-bottom: none !important;
 }
 
 .leaflet-control-zoom a:hover {
-  @apply bg-secondary;
+  background: hsl(var(--secondary)) !important;
 }
 
-/* Custom Marker Styles */
-.sensor-marker {
-  @apply rounded-full border-2 border-white shadow-lg;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+/* Square Sensor Markers */
+.sensor-marker-square {
+  border: 2px solid hsl(0 0% 100%);
+  box-shadow: 0 2px 6px hsl(220 30% 12% / 0.25);
+  border-radius: var(--radius);
+  transform: rotate(45deg);
 }
 
 .cluster-marker {
-  @apply rounded-full flex items-center justify-center font-semibold text-white border-2 border-white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  @apply flex items-center justify-center font-semibold text-white border-2 border-white;
+  border-radius: var(--radius);
+  box-shadow: 0 2px 8px hsl(220 30% 12% / 0.3);
 }
 
-/* Scrollbar Styling */
+/* Scrollbar Styling - Subtle */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-muted rounded-full;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-muted-foreground/30 rounded-full;
+  @apply bg-muted-foreground/20;
+  border-radius: var(--radius);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-muted-foreground/50;
+  @apply bg-muted-foreground/35;
+}
+
+/* Table Styling */
+.professional-table {
+  @apply w-full text-sm;
+}
+
+.professional-table thead {
+  @apply border-b-2 border-border;
+}
+
+.professional-table th {
+  @apply py-3 px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground;
+}
+
+.professional-table td {
+  @apply py-3 px-4;
+}
+
+.professional-table tbody tr {
+  @apply border-b border-border/60 transition-colors hover:bg-muted/40;
+}
+
+.professional-table tbody tr:last-child {
+  @apply border-b-0;
 }

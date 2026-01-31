@@ -31,36 +31,36 @@ function KPICard({
 }: KPICardProps) {
   const variantStyles = {
     default: 'border-border',
-    warning: 'border-depth-warning/30 bg-depth-warning/5',
-    critical: 'border-depth-critical/30 bg-depth-critical/5',
-    accent: 'border-accent/30 bg-accent/5',
+    warning: 'border-l-4 border-l-depth-warning border-t-border border-r-border border-b-border bg-depth-warning/5',
+    critical: 'border-l-4 border-l-depth-critical border-t-border border-r-border border-b-border bg-depth-critical/5',
+    accent: 'border-l-4 border-l-accent border-t-border border-r-border border-b-border bg-accent/5',
   };
 
   const iconStyles = {
     default: 'bg-secondary text-foreground',
-    warning: 'bg-depth-warning/20 text-depth-warning',
-    critical: 'bg-depth-critical/20 text-depth-critical',
-    accent: 'bg-accent/20 text-accent',
+    warning: 'bg-depth-warning/15 text-depth-warning',
+    critical: 'bg-depth-critical/15 text-depth-critical',
+    accent: 'bg-accent/15 text-accent',
   };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay }}
+      transition={{ duration: 0.25, delay }}
       className={cn("kpi-card", variantStyles[variant])}
     >
-      <div className="flex items-start justify-between mb-3">
-        <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", iconStyles[variant])}>
-          <Icon className="w-5 h-5" />
+      <div className="flex items-start justify-between mb-4">
+        <div className={cn("w-9 h-9 flex items-center justify-center", iconStyles[variant])} style={{ borderRadius: '0.25rem' }}>
+          <Icon className="w-4 h-4" />
         </div>
         {trend && trendValue && (
           <div className={cn(
-            "flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full",
+            "flex items-center gap-1 text-[10px] font-semibold px-2 py-1 uppercase tracking-wide",
             trend === 'down' ? 'bg-depth-critical/10 text-depth-critical' : 
             trend === 'up' ? 'bg-depth-safe/10 text-depth-safe' : 
             'bg-muted text-muted-foreground'
-          )}>
+          )} style={{ borderRadius: '0.25rem' }}>
             <TrendingDown className={cn("w-3 h-3", trend === 'up' && "rotate-180")} />
             {trendValue}
           </div>
@@ -68,8 +68,8 @@ function KPICard({
       </div>
       
       <div className="space-y-1">
-        <p className="text-sm text-muted-foreground font-medium">{title}</p>
-        <p className="text-3xl font-bold text-foreground tracking-tight">{value}</p>
+        <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{title}</p>
+        <p className="text-2xl font-bold text-foreground tracking-tight font-mono">{value}</p>
         <p className="text-xs text-muted-foreground">{subtitle}</p>
       </div>
     </motion.div>
