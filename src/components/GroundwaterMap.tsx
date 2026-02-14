@@ -172,7 +172,7 @@ export function GroundwaterMap({
       </MapContainer>
 
       {/* Map Legend - Professional Squared Design */}
-      <div className="absolute bottom-4 left-4 bg-card/98 backdrop-blur-sm border border-border p-4 shadow-elevated z-[1000]" style={{ borderRadius: '0.25rem' }}>
+      <div className="absolute bottom-4 left-4 bg-card/98 backdrop-blur-sm border border-border p-4 shadow-elevated z-10 pointer-events-none" style={{ borderRadius: '0.25rem' }}>
         <h4 className="text-xs font-semibold text-foreground mb-3 uppercase tracking-wider">Depth Classification</h4>
         <div className="space-y-2">
           <div className="flex items-center gap-3 text-xs">
@@ -195,7 +195,7 @@ export function GroundwaterMap({
       </div>
 
       {/* Sensor Count Badge - Squared */}
-      <div className="absolute top-4 right-4 bg-card/98 backdrop-blur-sm border border-border px-4 py-2 shadow-elevated z-[1000]" style={{ borderRadius: '0.25rem' }}>
+      <div className="absolute top-4 right-4 bg-card/98 backdrop-blur-sm border border-border px-4 py-2 shadow-elevated z-10 pointer-events-none" style={{ borderRadius: '0.25rem' }}>
         <div className="flex items-center gap-2 text-xs">
           <span className="w-2 h-2 bg-accent" style={{ borderRadius: '1px' }} />
           <span className="text-muted-foreground">
