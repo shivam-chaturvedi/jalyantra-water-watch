@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Clock, Save } from 'lucide-react';
 import { SensorReading } from '@/lib/data';
@@ -13,6 +14,8 @@ interface SensorHistoryModalProps {
 }
 
 export function SensorHistoryModal({ sensor, isOpen, onClose }: SensorHistoryModalProps) {
+  const [activeTab, setActiveTab] = useState<'chart' | 'table'>('chart');
+
   if (!sensor) return null;
 
   const chartData = sensor.history.length
@@ -24,6 +27,7 @@ export function SensorHistoryModal({ sensor, isOpen, onClose }: SensorHistoryMod
 
   const handleExportHistory = () => {
     if (!sensor) return;
+
     const historyRows =
       sensor.history.length > 0
         ? sensor.history.slice().reverse().map((point) => ({
@@ -76,65 +80,93 @@ export function SensorHistoryModal({ sensor, isOpen, onClose }: SensorHistoryMod
             </div>
 
             <div className="p-5 space-y-5 h-full overflow-hidden">
-              <div className="jal-card max-h-[40vh] overflow-y-auto">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-sm text-foreground">Depth History (Latest readings)</h3>
-                  <Button variant="outline" size="sm" className="text-xs uppercase tracking-wide" onClick={handleExportHistory}>
+              <div className="flex items-center gap-3 border-b border-border/50 pb-3">
+                {['chart', 'table'].map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setActiveTab(tab as 'chart' | 'table')}
+                    className={cn(
+                      'px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide transition',
+                      activeTab === tab
+                        ? 'bg-accent text-white shadow-sm'
+                        : 'bg-muted/30 text-muted-foreground'
+                    )}
+                  >
+                    {tab === 'chart' ? 'Graph' : 'Table'}
+                  </button>
+                ))}
+                <div className="ml-auto">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs uppercase tracking-wide"
+                    onClick={handleExportHistory}
+                  >
                     <Save className="w-3 h-3 mr-1" />
                     Export History
                   </Button>
                 </div>
-                <div className="h-56">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis
-                        dataKey="time"
-                        tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                        tickLine={false}
-                        axisLine={false}
-                      />
-                      <YAxis
-                        tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                        tickLine={false}
-                        axisLine={false}
-                        unit="m"
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: 'hsl(var(--card))',
-                          borderColor: 'hsl(var(--border))',
-                          borderRadius: '8px',
-                        }}
-                        formatter={(value: number) => [`${value}m`, 'Depth']}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="depth"
-                        stroke="hsl(187, 72%, 40%)"
-                        strokeWidth={2}
-                        dot={false}
-                        activeDot={{ r: 4, fill: 'hsl(187, 72%, 40%)' }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
               </div>
 
-              <div className="jal-card max-h-[25vh] overflow-y-auto">
-                <h3 className="font-semibold text-sm text-foreground mb-3">Historical Table</h3>
-                <div className="space-y-2 text-xs font-mono">
-                  {sensor.history.slice().reverse().map((point) => (
-                    <div key={point.id} className="flex items-center justify-between border-b border-border/50 pb-2">
-                      <span>{point.collectedDate}</span>
-                      <span>{point.depth}m</span>
-                    </div>
-                  ))}
-                  {!sensor.history.length && (
-                    <p className="text-muted-foreground">No history yet.</p>
-                  )}
+              {activeTab === 'chart' && (
+                <div className="jal-card max-h-[45vh] overflow-y-auto">
+                  <div className="h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis
+                          dataKey="time"
+                          tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                          tickLine={false}
+                          axisLine={false}
+                          unit="m"
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--card))',
+                            borderColor: 'hsl(var(--border))',
+                            borderRadius: '8px',
+                          }}
+                          formatter={(value: number) => [`${value}m`, 'Depth']}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="depth"
+                          stroke="hsl(187, 72%, 40%)"
+                          strokeWidth={2}
+                          dot={false}
+                          activeDot={{ r: 4, fill: 'hsl(187, 72%, 40%)' }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {activeTab === 'table' && (
+                <div className="jal-card max-h-[50vh] overflow-y-auto">
+                  <div className="space-y-2 text-xs font-mono">
+                    {sensor.history.slice().reverse().map((point) => (
+                      <div
+                        key={point.id}
+                        className="flex items-center justify-between border-b border-border/50 pb-2"
+                      >
+                        <span>{point.collectedDate}</span>
+                        <span>{point.depth}m</span>
+                      </div>
+                    ))}
+                    {!sensor.history.length && (
+                      <p className="text-muted-foreground">No history yet.</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </motion.div>
         </>
