@@ -21,6 +21,7 @@ interface NavBarProps {
   onLiveToggle: (live: boolean) => void;
   onRefresh: () => void;
   onExport?: () => void;
+  activeSensors: number;
 }
 
 export function NavBar({
@@ -35,18 +36,28 @@ export function NavBar({
   onLiveToggle,
   onRefresh,
   onExport,
+  activeSensors,
 }: NavBarProps) {
   return (
     <nav className="nav-bar">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
         {/* Logo & Brand - Squared Professional */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 gradient-water flex items-center justify-center" style={{ borderRadius: '0.25rem' }}>
-            <Droplets className="w-5 h-5 text-white" />
-          </div>
-          <div className="hidden sm:block">
+          <img
+            src="/logo.jpeg"
+            alt="JalYantra Logo"
+            className="w-16 h-16 object-cover"
+            style={{ borderRadius: '0.25rem' }}
+          />
+          <div>
             <h1 className="text-base font-bold text-foreground tracking-tight">JALYANTRA</h1>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest -mt-0.5">Groundwater Intelligence</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest -mt-0.5">
+              Groundwater Intelligence
+            </p>
+          </div>
+          <div className="flex flex-col text-right text-xs uppercase tracking-wide text-muted-foreground">
+            <span className="text-[9px]">Active sensors</span>
+            <p className="text-lg font-semibold text-foreground">{activeSensors}</p>
           </div>
         </div>
 

@@ -1,11 +1,10 @@
-import { useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { SensorReading, District, getDepthRiskLevel, getRiskColorClass } from '@/lib/data';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
-import { Crosshair } from 'lucide-react';
 
 interface GroundwaterMapProps {
   sensors: SensorReading[];
@@ -19,8 +18,8 @@ const MAHARASHTRA_CENTER: [number, number] = [19.7515, 75.7139];
 const DEFAULT_ZOOM = 7;
 
 // Custom hook to handle map events
-function MapController({ 
-  sensors, 
+function MapController({
+  sensors,
 }: { sensors: SensorReading[] }) {
   const map = useMap();
 
@@ -63,40 +62,14 @@ function createSquareIcon(color: string, size: number = 12) {
   });
 }
 
-export function GroundwaterMap({ 
-  sensors, 
-  districts, 
+export function GroundwaterMap({
+  sensors,
+  districts,
   onSensorClick,
-  onDistrictClick 
+  onDistrictClick
 }: GroundwaterMapProps) {
-  const mapRef = useRef<L.Map | null>(null);
-
-  const recenterMap = () => {
-    const map = mapRef.current;
-    if (!map || sensors.length === 0) return;
-
-    const latLngs = sensors
-      .map((sensor) => (typeof sensor.lat === 'number' && typeof sensor.long === 'number' ? [sensor.lat, sensor.long] as [number, number] : null))
-      .filter((coords): coords is [number, number] => coords !== null);
-
-    if (latLngs.length === 0) return;
-
-    map.invalidateSize();
-
-    const bounds = L.latLngBounds(latLngs);
-
-    if (bounds.isValid()) {
-      map.flyToBounds(bounds, { padding: [70, 70], duration: 0.8 });
-      return;
-    }
-
-    const avgLat = latLngs.reduce((sum, [lat]) => sum + lat, 0) / latLngs.length;
-    const avgLng = latLngs.reduce((sum, [, lng]) => sum + lng, 0) / latLngs.length;
-    map.flyTo([avgLat, avgLng], DEFAULT_ZOOM, { duration: 0.8 });
-  };
 
   const handleSensorClick = (sensor: SensorReading) => {
-    setSelectedSensor(sensor);
     onSensorClick?.(sensor);
   };
 
@@ -112,15 +85,12 @@ export function GroundwaterMap({
         className="h-full w-full"
         zoomControl={true}
         style={{ borderRadius: '0.25rem' }}
-        whenCreated={(map) => {
-          mapRef.current = map;
-        }}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
-        
+
         <MapController sensors={sensors} />
 
         {/* Sensor Markers - Square Design */}
@@ -135,10 +105,19 @@ export function GroundwaterMap({
               position={[sensor.lat, sensor.long]}
               icon={icon}
               eventHandlers={{
-                click: () => handleSensorClick(sensor),
+                click: (event: L.LeafletMouseEvent) => {
+                  event.target?.closeTooltip();
+                  handleSensorClick(sensor);
+                },
+                mouseover: (event: L.LeafletMouseEvent) => {
+                  event.target?.openTooltip();
+                },
+                mouseout: (event: L.LeafletMouseEvent) => {
+                  event.target?.closeTooltip();
+                },
               }}
             >
-              <Popup>
+              <Tooltip direction="top" offset={[0, -10]}>
                 <div className="min-w-[220px] p-1">
                   <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
                     <span className="font-semibold text-sm text-foreground">{sensor.deviceId}</span>
@@ -179,30 +158,18 @@ export function GroundwaterMap({
                     </div>
                   </div>
                   <div className="mt-3 pt-3 border-t border-border">
-                    <button 
-                      onClick={() => onSensorClick?.(sensor)}
-                      className="text-xs text-accent hover:text-accent/80 font-semibold uppercase tracking-wide transition-colors"
+                    <span
+                      className="text-xs text-accent font-semibold uppercase tracking-wide"
                     >
-                      View Full Details →
-                    </button>
+                      Click for Full Details →
+                    </span>
                   </div>
                 </div>
-              </Popup>
+              </Tooltip>
             </Marker>
           );
         })}
       </MapContainer>
-
-      {/* Recenter Button */}
-      <div className="absolute bottom-4 right-4 z-[1000]">
-        <button
-          onClick={recenterMap}
-          className="flex items-center gap-2 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wide rounded-full border border-border bg-card/90 text-foreground shadow-elevated hover:bg-card transition"
-        >
-          <Crosshair className="w-4 h-4" />
-          Recenter
-        </button>
-      </div>
 
       {/* Map Legend - Professional Squared Design */}
       <div className="absolute bottom-4 left-4 bg-card/98 backdrop-blur-sm border border-border p-4 shadow-elevated z-[1000]" style={{ borderRadius: '0.25rem' }}>
@@ -232,7 +199,7 @@ export function GroundwaterMap({
         <div className="flex items-center gap-2 text-xs">
           <span className="w-2 h-2 bg-accent" style={{ borderRadius: '1px' }} />
           <span className="text-muted-foreground">
-            <span className="font-bold text-foreground">{sensors.length}</span> sensors active
+            <span className="font-bold text-foreground">{sensors.length}</span> sensors monitored
           </span>
         </div>
       </div>

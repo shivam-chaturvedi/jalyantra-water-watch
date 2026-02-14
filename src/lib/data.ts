@@ -54,6 +54,7 @@ export interface Alert {
 
 export interface KPIStats {
   activeSensors: number;
+  totalSensors: number;
   avgDepth: number;
   criticalPercentage: number;
   fastestDecliningDistrict: string;
@@ -73,8 +74,10 @@ type ExtendedHistoryPoint = SensorHistoryPoint & {
   district?: string;
 };
 
+const MUMBAI_COORDINATES = { lat: 19.076, long: 72.8777 };
+
 const districtCenters = [
-  { name: 'Mumbai', lat: 19.076, long: 72.8777 },
+  { name: 'Mumbai', lat: 19.076, long: 72.95 },
   { name: 'Pune', lat: 18.5204, long: 73.8567 },
   { name: 'Nashik', lat: 19.9975, long: 73.7898 },
   { name: 'Nagpur', lat: 21.1458, long: 79.0882 },
@@ -109,13 +112,14 @@ const districtCenters = [
   { name: 'Raigad', lat: 18.5158, long: 73.1822 },
 ];
 
-const STATUS_FRESH_THRESHOLD_MS = 1000 * 60 * 60 * 6;
+const STATUS_FRESH_THRESHOLD_MS = 1000 * 60 * 60 * 24 * 30; // 30 days for demo purposes
 
 function getSensorStatusFromTimestamp(timestamp: number): 'active' | 'offline' {
   return Date.now() - timestamp < STATUS_FRESH_THRESHOLD_MS ? 'active' : 'offline';
 }
 
 function matchDistrictName(lat?: number, long?: number): string {
+
   if (lat == null || long == null) return 'Unknown';
 
   let closest = districtCenters[0];
@@ -165,14 +169,15 @@ export function transformFirebaseReadings(raw: FirebaseReadings): SensorReading[
 
           if (entry.depth == null || entry.lat == null || entry.long == null) return null;
 
+          const isMumbai = entry.district === 'Mumbai';
           return {
             id: entryId,
             depth: sanitizeDepth(entry.depth),
             collectedDate:
               entry.collectedDate || new Date(timestamp).toISOString().split('T')[0],
             timestamp,
-            lat: entry.lat,
-            long: entry.long,
+            lat: isMumbai ? MUMBAI_COORDINATES.lat : entry.lat,
+            long: isMumbai ? MUMBAI_COORDINATES.long : entry.long,
             deviceId: entry.deviceId || deviceKey,
             district: entry.district,
           };
@@ -187,13 +192,17 @@ export function transformFirebaseReadings(raw: FirebaseReadings): SensorReading[
       const districtName = latest.district || matchDistrictName(latest.lat, latest.long);
       const status = getSensorStatusFromTimestamp(latest.timestamp);
 
+      const isMumbaiReading = districtName === 'Mumbai';
+      const finalLat = isMumbaiReading ? MUMBAI_COORDINATES.lat : latest.lat;
+      const finalLong = isMumbaiReading ? MUMBAI_COORDINATES.long : latest.long;
+
       return {
         id: deviceKey,
         deviceId,
         depth: latest.depth,
         collectedDate: latest.collectedDate,
-        lat: latest.lat,
-        long: latest.long,
+        lat: finalLat,
+        long: finalLong,
         district: districtName,
         status,
         lastSync: new Date(latest.timestamp).toISOString(),
@@ -359,6 +368,7 @@ export function calculateKPIStats(readings: SensorReading[], districts: District
 
   return {
     activeSensors,
+    totalSensors: readings.length,
     avgDepth: Math.round(avgDepth * 10) / 10,
     criticalPercentage,
     fastestDecliningDistrict: fastestDeclining?.name || 'N/A',

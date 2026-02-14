@@ -9,6 +9,7 @@ import { Footer } from '@/components/Footer';
 import { useGroundwaterData } from '@/hooks/useGroundwaterData';
 import { SensorReading, District, Alert } from '@/lib/data';
 import { downloadDataAsCsv } from '@/lib/csv';
+import { SensorHistoryModal } from '@/components/SensorHistoryModal';
 import { motion } from 'framer-motion';
 
 const LOCATION_ALL_KEY = 'all-locations';
@@ -33,6 +34,8 @@ const Index = () => {
   const [selectedSensor, setSelectedSensor] = useState<SensorReading | null>(null);
   const [isDistrictPanelOpen, setIsDistrictPanelOpen] = useState(false);
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
+  const [historySensor, setHistorySensor] = useState<SensorReading | null>(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<string>(LOCATION_ALL_KEY);
   const [selectedDate, setSelectedDate] = useState<string>(DATE_ALL_KEY);
   const mapSectionRef = useRef<HTMLDivElement>(null);
@@ -55,6 +58,11 @@ const Index = () => {
     setSelectedSensor(sensor);
     setIsSensorModalOpen(true);
   };
+
+  const handleViewHistory = useCallback((sensor: SensorReading) => {
+    setHistorySensor(sensor);
+    setIsHistoryOpen(true);
+  }, []);
 
   const handleDistrictClick = (district: District) => {
     setSelectedDistrict(district);
@@ -135,6 +143,7 @@ const Index = () => {
         onLiveToggle={setIsLive}
         onRefresh={refreshData}
         onExport={handleExportAllSensors}
+        activeSensors={kpiStats?.activeSensors ?? 0}
       />
 
       {/* Main Content */}
@@ -271,6 +280,15 @@ const Index = () => {
         sensor={selectedSensor}
         isOpen={isSensorModalOpen}
         onClose={() => setIsSensorModalOpen(false)}
+        onViewHistory={() => {
+          if (!selectedSensor) return;
+          handleViewHistory(selectedSensor);
+        }}
+      />
+      <SensorHistoryModal
+        sensor={historySensor}
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
       />
     </div>
   );

@@ -19,15 +19,15 @@ interface KPICardProps {
   delay?: number;
 }
 
-function KPICard({ 
-  title, 
-  value, 
-  subtitle, 
-  icon: Icon, 
-  trend, 
+function KPICard({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  trend,
   trendValue,
   variant = 'default',
-  delay = 0 
+  delay = 0
 }: KPICardProps) {
   const variantStyles = {
     default: 'border-border',
@@ -57,16 +57,16 @@ function KPICard({
         {trend && trendValue && (
           <div className={cn(
             "flex items-center gap-1 text-[10px] font-semibold px-2 py-1 uppercase tracking-wide",
-            trend === 'down' ? 'bg-depth-critical/10 text-depth-critical' : 
-            trend === 'up' ? 'bg-depth-safe/10 text-depth-safe' : 
-            'bg-muted text-muted-foreground'
+            trend === 'down' ? 'bg-depth-critical/10 text-depth-critical' :
+              trend === 'up' ? 'bg-depth-safe/10 text-depth-safe' :
+                'bg-muted text-muted-foreground'
           )} style={{ borderRadius: '0.25rem' }}>
             <TrendingDown className={cn("w-3 h-3", trend === 'up' && "rotate-180")} />
             {trendValue}
           </div>
         )}
       </div>
-      
+
       <div className="space-y-1">
         <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{title}</p>
         <p className="text-2xl font-bold text-foreground tracking-tight font-mono">{value}</p>
@@ -97,9 +97,9 @@ export function KPICards({ stats, isLoading }: KPICardsProps) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <KPICard
-        title="Active Sensors"
-        value={stats.activeSensors}
-        subtitle="Connected and reporting"
+        title="Total Sensors"
+        value={stats.totalSensors}
+        subtitle="Monitored locations"
         icon={Activity}
         variant="accent"
         delay={0}

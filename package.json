@@ -53,6 +53,7 @@
     "framer-motion": "^12.29.2",
     "input-otp": "^1.4.2",
     "leaflet": "^1.9.4",
+    "lovable-tagger": "^1.1.13",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",
     "react": "^18.3.1",
