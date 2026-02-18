@@ -169,15 +169,14 @@ export function transformFirebaseReadings(raw: FirebaseReadings): SensorReading[
 
           if (entry.depth == null || entry.lat == null || entry.long == null) return null;
 
-          const isMumbai = entry.district === 'Mumbai';
           return {
             id: entryId,
             depth: sanitizeDepth(entry.depth),
             collectedDate:
               entry.collectedDate || new Date(timestamp).toISOString().split('T')[0],
             timestamp,
-            lat: isMumbai ? MUMBAI_COORDINATES.lat : entry.lat,
-            long: isMumbai ? MUMBAI_COORDINATES.long : entry.long,
+            lat: entry.lat,
+            long: entry.long,
             deviceId: entry.deviceId || deviceKey,
             district: entry.district,
           };
@@ -192,9 +191,8 @@ export function transformFirebaseReadings(raw: FirebaseReadings): SensorReading[
       const districtName = latest.district || matchDistrictName(latest.lat, latest.long);
       const status = getSensorStatusFromTimestamp(latest.timestamp);
 
-      const isMumbaiReading = districtName === 'Mumbai';
-      const finalLat = isMumbaiReading ? MUMBAI_COORDINATES.lat : latest.lat;
-      const finalLong = isMumbaiReading ? MUMBAI_COORDINATES.long : latest.long;
+      const finalLat = latest.lat;
+      const finalLong = latest.long;
 
       return {
         id: deviceKey,

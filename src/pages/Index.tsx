@@ -178,7 +178,7 @@ const Index = () => {
           />
 
           {/* Main Map Section */}
-          <div ref={mapSectionRef} className="jal-card-elevated p-0 overflow-hidden">
+          <div ref={mapSectionRef} className="jal-card-elevated overflow-visible">
             <div className="p-4 border-b border-border flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Interactive Sensor Map</h2>
@@ -190,12 +190,14 @@ const Index = () => {
                 Layer: Sensor Network
               </div>
             </div>
-            <GroundwaterMap
-              sensors={filteredSensors}
-              districts={filteredDistricts}
-              onSensorClick={handleSensorClick}
-              onDistrictClick={handleDistrictClick}
-            />
+            <div className="overflow-hidden">
+              <GroundwaterMap
+                sensors={filteredSensors}
+                districts={filteredDistricts}
+                onSensorClick={handleSensorClick}
+                onDistrictClick={handleDistrictClick}
+              />
+            </div>
           </div>
 
           {/* District Quick Overview */}

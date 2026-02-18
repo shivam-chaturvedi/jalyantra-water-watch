@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -68,6 +68,32 @@ export function GroundwaterMap({
   onSensorClick,
   onDistrictClick
 }: GroundwaterMapProps) {
+  const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
+
+  const raiseMarker = (marker: L.Marker | null) => {
+    if (!marker) return;
+    marker.setZIndexOffset(1000);
+    marker.bringToFront();
+  };
+
+  const resetMarkerZIndex = (marker: L.Marker | null) => {
+    if (!marker) return;
+    marker.setZIndexOffset(0);
+  };
+
+  const handleMarkerMouseOver = (sensor: SensorReading) => (event: L.LeafletMouseEvent) => {
+    const marker = event.target as L.Marker | null;
+    raiseMarker(marker);
+    mapInstance?.panTo([sensor.lat, sensor.long], { animate: true });
+    mapInstance?.panBy([0, -80], { animate: true });
+    marker?.openTooltip();
+  };
+
+  const handleMarkerMouseOut = (event: L.LeafletMouseEvent) => {
+    const marker = event.target as L.Marker | null;
+    resetMarkerZIndex(marker);
+    marker?.closeTooltip();
+  };
 
   const handleSensorClick = (sensor: SensorReading) => {
     onSensorClick?.(sensor);
@@ -79,13 +105,14 @@ export function GroundwaterMap({
       animate={{ opacity: 1 }}
       className="map-container h-[500px] lg:h-[600px] relative"
     >
-      <MapContainer
-        center={MAHARASHTRA_CENTER}
-        zoom={DEFAULT_ZOOM}
-        className="h-full w-full"
-        zoomControl={true}
-        style={{ borderRadius: '0.25rem' }}
-      >
+        <MapContainer
+          center={MAHARASHTRA_CENTER}
+          zoom={DEFAULT_ZOOM}
+          className="h-full w-full"
+          zoomControl={true}
+          whenCreated={setMapInstance}
+          style={{ borderRadius: '0.25rem' }}
+        >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
@@ -109,15 +136,11 @@ export function GroundwaterMap({
                   event.target?.closeTooltip();
                   handleSensorClick(sensor);
                 },
-                mouseover: (event: L.LeafletMouseEvent) => {
-                  event.target?.openTooltip();
-                },
-                mouseout: (event: L.LeafletMouseEvent) => {
-                  event.target?.closeTooltip();
-                },
+                mouseover: handleMarkerMouseOver(sensor),
+                mouseout: handleMarkerMouseOut,
               }}
             >
-              <Tooltip direction="top" offset={[0, -10]}>
+              <Tooltip className="jal-tooltip" direction="top" offset={[0, -10]}>
                 <div className="min-w-[220px] p-1">
                   <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
                     <span className="font-semibold text-sm text-foreground">{sensor.deviceId}</span>
