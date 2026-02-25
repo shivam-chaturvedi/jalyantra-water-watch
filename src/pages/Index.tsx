@@ -11,6 +11,9 @@ import { SensorReading, District, Alert } from '@/lib/data';
 import { downloadDataAsCsv } from '@/lib/csv';
 import { SensorHistoryModal } from '@/components/SensorHistoryModal';
 import { motion } from 'framer-motion';
+import { onValue, ref, set } from 'firebase/database';
+import { database } from '@/lib/firebaseClient';
+import { useAuth } from '@/contexts/AuthContext';
 
 const LOCATION_ALL_KEY = 'all-locations';
 const DATE_ALL_KEY = 'all-dates';
@@ -30,6 +33,7 @@ const Index = () => {
     refreshData,
   } = useGroundwaterData();
 
+  const { user, logOut, actionLoading } = useAuth();
   const [selectedDistrict, setSelectedDistrict] = useState<District | null>(null);
   const [selectedSensor, setSelectedSensor] = useState<SensorReading | null>(null);
   const [isDistrictPanelOpen, setIsDistrictPanelOpen] = useState(false);
@@ -39,6 +43,29 @@ const Index = () => {
   const [selectedLocation, setSelectedLocation] = useState<string>(LOCATION_ALL_KEY);
   const [selectedDate, setSelectedDate] = useState<string>(DATE_ALL_KEY);
   const mapSectionRef = useRef<HTMLDivElement>(null);
+  const [sensorDataSnapshot, setSensorDataSnapshot] = useState<Record<string, unknown> | null>(null);
+  useEffect(() => {
+    const sensorDataRef = ref(database, 'sensorData');
+    const unsubscribe = onValue(sensorDataRef, (snapshot) => {
+      setSensorDataSnapshot(snapshot.val());
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const testRef = ref(database, 'sensorData/test');
+    set(testRef, {
+      updatedBy: user.uid,
+      updatedAt: new Date().toISOString(),
+      heartbeat: Date.now(),
+    }).catch((error) => {
+      console.error('Unable to write /sensorData/test', error);
+    });
+  }, [user]);
 
   useEffect(() => {
     if (selectedLocation === LOCATION_ALL_KEY) return;
@@ -83,6 +110,11 @@ const Index = () => {
   const locationFilter = selectedLocation === LOCATION_ALL_KEY ? null : selectedLocation;
   const dateFilter = selectedDate === DATE_ALL_KEY ? null : selectedDate;
 
+  const sensorDataEntryCount = useMemo(() => {
+    if (!sensorDataSnapshot) return 0;
+    return Object.keys(sensorDataSnapshot).length;
+  }, [sensorDataSnapshot]);
+
   const filteredSensors = useMemo(() => {
     return sensors.filter((sensor) => {
       const matchesLocation = locationFilter ? sensor.district === locationFilter : true;
@@ -110,6 +142,14 @@ const Index = () => {
     setIsDistrictPanelOpen(false);
     mapSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await logOut();
+    } catch (error) {
+      console.error('Logout failed', error);
+    }
+  }, [logOut]);
 
   const handleExportAllSensors = useCallback(() => {
     if (!filteredSensors.length) return;
@@ -144,6 +184,9 @@ const Index = () => {
         onRefresh={refreshData}
         onExport={handleExportAllSensors}
         activeSensors={kpiStats?.activeSensors ?? 0}
+        userEmail={user?.email ?? null}
+        onLogout={handleLogout}
+        logoutLoading={actionLoading}
       />
 
       {/* Main Content */}
@@ -190,18 +233,43 @@ const Index = () => {
                 Layer: Sensor Network
               </div>
             </div>
-            <div className="overflow-hidden">
-              <GroundwaterMap
-                sensors={filteredSensors}
-                districts={filteredDistricts}
-                onSensorClick={handleSensorClick}
-                onDistrictClick={handleDistrictClick}
-              />
-            </div>
+          <div className="overflow-hidden">
+            <GroundwaterMap
+              sensors={filteredSensors}
+              districts={filteredDistricts}
+              onSensorClick={handleSensorClick}
+              onDistrictClick={handleDistrictClick}
+            />
           </div>
+        </div>
 
-          {/* District Quick Overview */}
-          <div className="jal-card">
+        {/* Sensor Data Mirror */}
+        <div className="jal-card-elevated overflow-hidden">
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Realtime sensorData</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">Reading /sensorData and writing /sensorData/test</p>
+            </div>
+            <span className="text-[11px] font-mono text-muted-foreground">
+              Entries: {sensorDataEntryCount}
+            </span>
+          </div>
+          <div className="p-4 space-y-2">
+            {sensorDataSnapshot ? (
+              <pre className="max-h-40 overflow-auto rounded border border-border bg-background/60 p-3 text-[11px] font-mono text-foreground">
+                {JSON.stringify(sensorDataSnapshot, null, 2)}
+              </pre>
+            ) : (
+              <p className="text-xs text-muted-foreground">Waiting for data under /sensorData to appear.</p>
+            )}
+            <p className="text-xs uppercase tracking-widest text-muted-foreground">
+              Heartbeat pushes happen automatically after auth changes.
+            </p>
+          </div>
+        </div>
+
+        {/* District Quick Overview */}
+        <div className="jal-card">
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
               <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">District Overview</h2>
               <span className="text-[10px] text-muted-foreground uppercase tracking-wider">

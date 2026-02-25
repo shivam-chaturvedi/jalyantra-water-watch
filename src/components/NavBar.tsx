@@ -22,6 +22,9 @@ interface NavBarProps {
   onRefresh: () => void;
   onExport?: () => void;
   activeSensors: number;
+  userEmail?: string | null;
+  onLogout?: () => void;
+  logoutLoading?: boolean;
 }
 
 export function NavBar({
@@ -37,6 +40,9 @@ export function NavBar({
   onRefresh,
   onExport,
   activeSensors,
+  userEmail,
+  onLogout,
+  logoutLoading = false,
 }: NavBarProps) {
   return (
     <nav className="nav-bar">
@@ -62,7 +68,7 @@ export function NavBar({
         </div>
 
         {/* Controls */}
-        <div className="flex items-center gap-2 sm:gap-2">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Location Selector */}
           <Select value={selectedLocation} onValueChange={onLocationChange}>
             <SelectTrigger className="w-[160px] h-8 text-xs font-medium">
@@ -134,6 +140,26 @@ export function NavBar({
             <Download className="h-3.5 w-3.5" />
             Export
           </Button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {userEmail && (
+            <div className="hidden md:flex flex-col items-end text-[10px] uppercase tracking-wide text-muted-foreground">
+              <span>Signed in as</span>
+              <p className="font-mono text-[12px] text-foreground">{userEmail}</p>
+            </div>
+          )}
+          {onLogout && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={onLogout}
+              disabled={logoutLoading}
+            >
+              {logoutLoading ? 'Signing out…' : 'Logout'}
+            </Button>
+          )}
         </div>
       </div>
 
