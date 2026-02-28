@@ -1,4 +1,4 @@
-import { Droplets, RefreshCw, Download, Radio } from 'lucide-react';
+import { RefreshCw, Download, Radio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -22,9 +22,6 @@ interface NavBarProps {
   onRefresh: () => void;
   onExport?: () => void;
   activeSensors: number;
-  userEmail?: string | null;
-  onLogout?: () => void;
-  logoutLoading?: boolean;
 }
 
 export function NavBar({
@@ -40,9 +37,6 @@ export function NavBar({
   onRefresh,
   onExport,
   activeSensors,
-  userEmail,
-  onLogout,
-  logoutLoading = false,
 }: NavBarProps) {
   return (
     <nav className="nav-bar">
@@ -142,25 +136,6 @@ export function NavBar({
           </Button>
         </div>
 
-        <div className="flex items-center gap-3">
-          {userEmail && (
-            <div className="hidden md:flex flex-col items-end text-[10px] uppercase tracking-wide text-muted-foreground">
-              <span>Signed in as</span>
-              <p className="font-mono text-[12px] text-foreground">{userEmail}</p>
-            </div>
-          )}
-          {onLogout && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8"
-              onClick={onLogout}
-              disabled={logoutLoading}
-            >
-              {logoutLoading ? 'Signing out…' : 'Logout'}
-            </Button>
-          )}
-        </div>
       </div>
 
       {/* Last Updated Strip */}

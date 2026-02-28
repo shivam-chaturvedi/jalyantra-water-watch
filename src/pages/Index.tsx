@@ -11,9 +11,8 @@ import { SensorReading, District, Alert } from '@/lib/data';
 import { downloadDataAsCsv } from '@/lib/csv';
 import { SensorHistoryModal } from '@/components/SensorHistoryModal';
 import { motion } from 'framer-motion';
-import { onValue, ref, set } from 'firebase/database';
+import { onValue, ref } from 'firebase/database';
 import { database } from '@/lib/firebaseClient';
-import { useAuth } from '@/contexts/AuthContext';
 
 const LOCATION_ALL_KEY = 'all-locations';
 const DATE_ALL_KEY = 'all-dates';
@@ -33,7 +32,6 @@ const Index = () => {
     refreshData,
   } = useGroundwaterData();
 
-  const { user, logOut, actionLoading } = useAuth();
   const [selectedDistrict, setSelectedDistrict] = useState<District | null>(null);
   const [selectedSensor, setSelectedSensor] = useState<SensorReading | null>(null);
   const [isDistrictPanelOpen, setIsDistrictPanelOpen] = useState(false);
@@ -54,18 +52,6 @@ const Index = () => {
       unsubscribe();
     };
   }, []);
-
-  useEffect(() => {
-    if (!user) return;
-    const testRef = ref(database, 'sensorData/test');
-    set(testRef, {
-      updatedBy: user.uid,
-      updatedAt: new Date().toISOString(),
-      heartbeat: Date.now(),
-    }).catch((error) => {
-      console.error('Unable to write /sensorData/test', error);
-    });
-  }, [user]);
 
   useEffect(() => {
     if (selectedLocation === LOCATION_ALL_KEY) return;
@@ -143,14 +129,6 @@ const Index = () => {
     mapSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
 
-  const handleLogout = useCallback(async () => {
-    try {
-      await logOut();
-    } catch (error) {
-      console.error('Logout failed', error);
-    }
-  }, [logOut]);
-
   const handleExportAllSensors = useCallback(() => {
     if (!filteredSensors.length) return;
 
@@ -184,9 +162,6 @@ const Index = () => {
         onRefresh={refreshData}
         onExport={handleExportAllSensors}
         activeSensors={kpiStats?.activeSensors ?? 0}
-        userEmail={user?.email ?? null}
-        onLogout={handleLogout}
-        logoutLoading={actionLoading}
       />
 
       {/* Main Content */}
