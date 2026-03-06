@@ -1,4 +1,5 @@
 import { RefreshCw, Download, Radio } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -42,7 +43,7 @@ export function NavBar({
     <nav className="nav-bar">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
         {/* Logo & Brand - Squared Professional */}
-        <div className="flex items-center gap-3">
+        <Link to="/" className="flex items-center gap-3">
           <img
             src="/logo.jpeg"
             alt="JalYantra Logo"
@@ -59,7 +60,7 @@ export function NavBar({
             <span className="text-[9px]">Active sensors</span>
             <p className="text-lg font-semibold text-foreground">{activeSensors}</p>
           </div>
-        </div>
+        </Link>
 
         {/* Controls */}
         <div className="flex flex-wrap items-center gap-3">
