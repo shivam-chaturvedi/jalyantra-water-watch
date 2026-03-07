@@ -2,6 +2,7 @@ import { FormEvent, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Footer } from "@/components/Footer";
+import useGoogleTranslateInit from '@/hooks/useGoogleTranslateInit';
 
 const navLinks = [
   { label: "Features", id: "features" },
@@ -100,6 +101,8 @@ export default function Home() {
     if (!section) return;
     section.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
+
+  useGoogleTranslateInit();
   return (
     <div className="bg-background text-foreground">
       <header className="border-b border-border bg-card/90 backdrop-blur-sm shadow-sm">
@@ -126,9 +129,12 @@ export default function Home() {
               </a>
             ))}
           </nav>
-          <Button asChild size="sm" className="rounded-full px-5 bg-[#007b6d] hover:bg-[#006157]">
-            <Link to="/dashboard">Go to Dashboard</Link>
-          </Button>
+          <div className="flex items-center gap-3">
+            <div id="google_translate_element" className="translate-widget" />
+            <Button asChild size="sm" className="rounded-full px-5 bg-[#007b6d] hover:bg-[#006157]">
+              <Link to="/dashboard">Go to Dashboard</Link>
+            </Button>
+          </div>
         </div>
       </header>
 
