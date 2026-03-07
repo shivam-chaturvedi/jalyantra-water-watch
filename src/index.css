@@ -168,7 +168,7 @@
   }
 
   .nav-bar{
-    @apply fixed top-0 left-0 right-0 z-50 backdrop-blur-sm border-b border-border;
+    @apply fixed top-[32px] left-0 right-0 z-50 backdrop-blur-sm border-b border-border;
     background-color:hsl(var(--card)/0.98);
     box-shadow:0 1px 2px 0 hsl(220 30% 12% / 0.03);
   }

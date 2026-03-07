@@ -147,13 +147,15 @@ const Index = () => {
   }, [filteredSensors]);
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Navigation Bar */}
-      <NavBar
-        selectedLocation={selectedLocation}
-        locationOptions={availableLocations}
-        selectedDate={selectedDate}
-        dateOptions={availableDates}
+    <>
+      <div className="h-[32px] w-full bg-background" aria-hidden="true" />
+      <div className="min-h-screen bg-background">
+        {/* Navigation Bar */}
+        <NavBar
+          selectedLocation={selectedLocation}
+          locationOptions={availableLocations}
+          selectedDate={selectedDate}
+          dateOptions={availableDates}
         isLive={isLive}
         lastUpdated={lastUpdated}
         onLocationChange={setSelectedLocation}
@@ -309,10 +311,10 @@ const Index = () => {
         </motion.div>
       </main>
 
-      {/* Footer */}
-      <Footer />
+        {/* Footer */}
+        <Footer />
 
-      {/* District Panel (Slide-in) */}
+        {/* District Panel (Slide-in) */}
         <DistrictPanel
           district={selectedDistrict}
           isOpen={isDistrictPanelOpen}
@@ -330,12 +332,13 @@ const Index = () => {
           handleViewHistory(selectedSensor);
         }}
       />
-      <SensorHistoryModal
-        sensor={historySensor}
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-      />
-    </div>
+        <SensorHistoryModal
+          sensor={historySensor}
+          isOpen={isHistoryOpen}
+          onClose={() => setIsHistoryOpen(false)}
+        />
+      </div>
+    </>
   );
 };
 

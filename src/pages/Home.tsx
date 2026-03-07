@@ -104,8 +104,10 @@ export default function Home() {
 
   useGoogleTranslateInit();
   return (
-    <div className="bg-background text-foreground">
-      <header className="border-b border-border bg-card/90 backdrop-blur-sm shadow-sm">
+    <>
+      <div className="h-[32px] w-full bg-background" aria-hidden="true" />
+      <div className="bg-background text-foreground">
+        <header className="border-b border-border bg-card/90 backdrop-blur-sm shadow-sm">
         <div className="container mx-auto flex items-center justify-between px-4 py-4">
           <Link to="/" className="flex items-center gap-3">
             <img
@@ -402,6 +404,7 @@ export default function Home() {
       </main>
 
       <Footer />
-    </div>
+      </div>
+    </>
   );
 }
