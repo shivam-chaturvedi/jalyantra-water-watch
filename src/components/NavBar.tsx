@@ -9,7 +9,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import useGoogleTranslateInit from '@/hooks/useGoogleTranslateInit';
+import GoogleTranslateDropdown from '@/components/GoogleTranslate';
 
 interface NavBarProps {
   selectedLocation: string;
@@ -40,7 +40,6 @@ export function NavBar({
   onExport,
   activeSensors,
 }: NavBarProps) {
-  useGoogleTranslateInit();
   return (
     <nav className="nav-bar">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
@@ -137,9 +136,8 @@ export function NavBar({
             <Download className="h-3.5 w-3.5" />
             Export
           </Button>
-          <div className="hidden items-center gap-1 text-[10px] uppercase tracking-[0.4em] text-muted-foreground md:flex">
-            <span>Translate</span>
-            <div id="google_translate_element" className="translate-widget" />
+          <div className="hidden md:flex">
+            <GoogleTranslateDropdown className="max-w-[220px]" />
           </div>
         </div>
 

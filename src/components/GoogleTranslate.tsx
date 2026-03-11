@@ -1,4 +1,6 @@
+import { Globe } from "lucide-react";
 import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
 
 const GOOGLE_SCRIPT_ID = "google-translate-script";
 
@@ -30,7 +32,11 @@ const loadGoogleTranslateScript = () => {
   document.body.appendChild(script);
 };
 
-const GoogleTranslateDropdown = () => {
+interface GoogleTranslateDropdownProps {
+  className?: string;
+}
+
+const GoogleTranslateDropdown = ({ className }: GoogleTranslateDropdownProps) => {
   const [selectedLanguage, setSelectedLanguage] = useState("en");
 
   useEffect(() => {
@@ -51,7 +57,7 @@ const GoogleTranslateDropdown = () => {
     };
 
     if (window.google?.translate?.TranslateElement) {
-      window.googleTranslateElementInit();
+      window.googleTranslateElementInit?.();
     }
 
     loadGoogleTranslateScript();
@@ -87,22 +93,14 @@ const GoogleTranslateDropdown = () => {
   }, [selectedLanguage]);
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-        Translate
-      </span>
-      <select
-        value={selectedLanguage}
-        onChange={(event) => setSelectedLanguage(event.target.value)}
-        className="rounded-full border border-border bg-background/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground outline-none transition focus:ring-2 focus:ring-inset focus:ring-[#0c7a61]"
-        aria-label="Translate JalYantra site"
-      >
-        {languages.map((language) => (
-          <option key={language.code} value={language.code}>
-            {language.label}
-          </option>
-        ))}
-      </select>
+    <div
+      className={cn(
+        "flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-[0.35em] text-muted-foreground",
+        className
+      )}
+    >
+      
+      
       <div id="google_translate_element" className="hidden" aria-hidden="true" />
     </div>
   );

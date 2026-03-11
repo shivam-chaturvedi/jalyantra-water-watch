@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JalYantra Water Watch</title>
+    <meta name="description" content="Interactive groundwater monitoring dashboard powered by Firebase data." />
+    <meta name="author" content="JalYantra" />
+    <link rel="icon" type="image/jpeg" href="/logo.jpeg" />
+
+    <meta property="og:title" content="JalYantra Water Watch" />
+    <meta property="og:description" content="Live groundwater sensor analytics with Firebase and Leaflet." />
+    <meta property="og:type" content="website" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@JalYantra" />
+    <script type="module" crossorigin src="/assets/index-GZUz0Rvp.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BO-QK4G8.css">
+  </head>
+
+  <body>
+    <div id="root"></div>
+
+    <script>
+      const GOOGLE_TRANSLATE_ELEMENT_ID = "google_translate_element";
+
+      function googleTranslateElementInit() {
+        const googleNamespace = window.google;
+        if (!googleNamespace?.translate?.TranslateElement) {
+          setTimeout(googleTranslateElementInit, 150);
+          return;
+        }
+
+        const target = document.getElementById(GOOGLE_TRANSLATE_ELEMENT_ID);
+        if (!target) {
+          return;
+        }
+
+        new googleNamespace.translate.TranslateElement(
+          {
+            pageLanguage: "en",
+            includedLanguages: "en,hi,bn,ta,te,mr,gu",
+            layout: googleNamespace.translate.TranslateElement.InlineLayout.SIMPLE,
+          },
+          GOOGLE_TRANSLATE_ELEMENT_ID
+        );
+      }
+    </script>
+
+    <script
+      id="google-translate-script"
+      src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"
+      defer
+    ></script>
+  </body>
+</html>

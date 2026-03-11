@@ -1,8 +1,7 @@
-import { FormEvent, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { FormEvent, MouseEvent, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Footer } from "@/components/Footer";
-import useGoogleTranslateInit from '@/hooks/useGoogleTranslateInit';
+import GoogleTranslateDropdown from "@/components/GoogleTranslate";
 
 const navLinks = [
   { label: "Features", id: "features" },
@@ -102,14 +101,27 @@ export default function Home() {
     section.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
-  useGoogleTranslateInit();
+  const navigateToDashboard = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    window.location.assign("/dashboard");
+  }, []);
+
+  const navigateToHome = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    window.location.assign("/");
+  }, []);
+
   return (
     <>
       <div className="h-[32px] w-full bg-background" aria-hidden="true" />
       <div className="bg-background text-foreground">
         <header className="border-b border-border bg-card/90 backdrop-blur-sm shadow-sm">
         <div className="container mx-auto flex items-center justify-between px-4 py-4">
-          <Link to="/" className="flex items-center gap-3">
+          <a
+            href="/"
+            onClick={navigateToHome}
+            className="flex items-center gap-3"
+          >
             <img
               src="/logo.jpeg"
               alt="JalYantra logo"
@@ -123,7 +135,7 @@ export default function Home() {
                 Groundwater intelligence
               </p>
             </div>
-          </Link>
+          </a>
           <nav className="hidden gap-6 text-xs font-semibold uppercase tracking-wide text-muted-foreground md:flex">
             {navLinks.map((link) => (
               <a key={link.id} href={`#${link.id}`} className="hover:text-foreground">
@@ -131,10 +143,12 @@ export default function Home() {
               </a>
             ))}
           </nav>
-          <div className="flex items-center gap-3">
-            <div id="google_translate_element" className="translate-widget" />
+          <div className="flex flex-wrap items-center gap-4">
+            <GoogleTranslateDropdown className="max-w-[220px]" />
             <Button asChild size="sm" className="rounded-full px-5 bg-[#007b6d] hover:bg-[#006157]">
-              <Link to="/dashboard">Go to Dashboard</Link>
+              <a href="/dashboard" onClick={navigateToDashboard}>
+                Go to Dashboard
+              </a>
             </Button>
           </div>
         </div>
@@ -164,7 +178,9 @@ export default function Home() {
               </div>
               <div className="flex flex-wrap gap-3">
                 <Button asChild size="lg" className="rounded-full bg-[#0c7a61] hover:bg-[#0a6a54]">
-                  <Link to="/dashboard">Go to Dashboard</Link>
+                  <a href="/dashboard" onClick={navigateToDashboard}>
+                    Go to Dashboard
+                  </a>
                 </Button>
                 <Button
                   variant="outline"

@@ -312,12 +312,13 @@
 .goog-te-gadget-simple::before {
   content: "";
   position: absolute;
-  left: 10px;
-  width: 30px;
-  height: 30px;
+  left: -10px;
+  width: 60px;
+  height: 60px;
   background-image: url("/icons/lan.png"); /* your icon path */
   background-size: contain;
   background-repeat: no-repeat;
+  border: none !important;
 }
 /* Hide Google icon */
 .goog-te-gadget-icon {
