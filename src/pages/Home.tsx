@@ -1,4 +1,4 @@
-import { FormEvent, MouseEvent, useCallback } from "react";
+import { ChangeEvent, FormEvent, MouseEvent, useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Footer } from "@/components/Footer";
 import GoogleTranslateDropdown from "@/components/GoogleTranslate";
@@ -95,6 +95,78 @@ const showValidationSection = isFlagEnabled(import.meta.env.VITE_SHOW_VALIDATION
 const showCarouselSection = isFlagEnabled(import.meta.env.VITE_SHOW_IMAGE_CAROUSEL);
 
 export default function Home() {
+  const [contactInfo, setContactInfo] = useState({
+    name: "",
+    organization: "",
+    email: "",
+    interest: "",
+    details: "",
+  });
+
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
+    "idle"
+  );
+  const [statusMessage, setStatusMessage] = useState("");
+
+  const handleContactChange = (
+    event: ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >
+  ) => {
+    const { name, value } = event.target;
+    setContactInfo((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleContactSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setStatus("sending");
+    setStatusMessage("Sending your request…");
+
+    try {
+      const response = await fetch(
+        "https://mailer-azure-nu.vercel.app/api/send-email",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: "support@jalyantra.tech",
+            subject: `New pilot inquiry from ${contactInfo.name || "visitor"}`,
+            text: `Name: ${contactInfo.name}
+Organization: ${contactInfo.organization}
+Email: ${contactInfo.email}
+Interest: ${contactInfo.interest}
+Details: ${contactInfo.details}`,
+            html: `<p><strong>Name:</strong> ${contactInfo.name}</p>
+<p><strong>Organization:</strong> ${contactInfo.organization}</p>
+<p><strong>Email:</strong> ${contactInfo.email}</p>
+<p><strong>Interest:</strong> ${contactInfo.interest}</p>
+<p><strong>Details:</strong><br/>${contactInfo.details}</p>`,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      setStatus("sent");
+      setStatusMessage("Thanks! Your inquiry has been delivered.");
+      setContactInfo({
+        name: "",
+        organization: "",
+        email: "",
+        interest: "",
+        details: "",
+      });
+    } catch (error: unknown) {
+      console.error("Contact form error", error);
+      setStatus("error");
+      setStatusMessage(
+        "Something went wrong. Please try again or email support@jalyantra.tech directly."
+      );
+    }
+  };
+
   const scrollToSection = useCallback((sectionId: string) => {
     const section = document.getElementById(sectionId);
     if (!section) return;
@@ -115,37 +187,37 @@ export default function Home() {
     <>
       <div className="h-[32px] w-full bg-background" aria-hidden="true" />
       <div className="bg-background text-foreground">
-        <header className="border-b border-border bg-card/90 backdrop-blur-sm shadow-sm">
-        <div className="container mx-auto flex items-center justify-between px-4 py-4">
+        <header className="border-b border-border bg-card/90 backdrop-blur-sm shadow-sm sticky top-0 z-50">
+        <div className="container mx-auto flex items-center gap-4 px-4 py-3">
           <a
             href="/"
             onClick={navigateToHome}
-            className="flex items-center gap-3"
+            className="flex items-center gap-3 flex-shrink-0"
           >
             <img
               src="/logo.jpeg"
               alt="JalYantra logo"
-              className="h-10 w-10 rounded-full object-cover"
+              className="h-20 w-20 rounded-2xl object-cover ring-2 ring-blue-200 shadow-md"
             />
             <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="text-xl font-bold uppercase tracking-wide" style={{ color: '#1e40af', fontFamily: 'Poppins, Inter, sans-serif' }}>
                 JalYantra
               </p>
-              <p className="text-[11px] text-muted-foreground uppercase tracking-widest">
-                Groundwater intelligence
+              <p className="text-sm text-muted-foreground uppercase tracking-widest font-medium">
+                Groundwater Intelligence
               </p>
             </div>
           </a>
-          <nav className="hidden gap-6 text-xs font-semibold uppercase tracking-wide text-muted-foreground md:flex">
+          <nav className="hidden md:flex flex-1 justify-center gap-6 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             {navLinks.map((link) => (
-              <a key={link.id} href={`#${link.id}`} className="hover:text-foreground">
+              <a key={link.id} href={`#${link.id}`} className="hover:text-blue-600 transition-colors">
                 {link.label}
               </a>
             ))}
           </nav>
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="ml-auto flex items-center gap-3">
             <GoogleTranslateDropdown className="max-w-[220px]" />
-            <Button asChild size="sm" className="rounded-full px-5 bg-[#007b6d] hover:bg-[#006157]">
+            <Button asChild size="sm" className="rounded-full px-6 py-2 text-sm font-bold bg-blue-700 hover:bg-blue-800 shadow-md">
               <a href="/dashboard" onClick={navigateToDashboard}>
                 Go to Dashboard
               </a>
@@ -154,30 +226,36 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="space-y-20 pt-8 pb-16">
+      <main className="space-y-24 pt-8 pb-16">
         <section className="container mx-auto px-4" id="features">
-          <div className="grid gap-10 rounded-[32px] border border-border bg-card px-6 py-12 lg:grid-cols-[1.2fr_0.8fr]">
-            <div className="space-y-6">
-              <p className="text-sm uppercase tracking-[0.4em] text-muted-foreground">Smarter monitoring</p>
-              <h1 className="text-4xl font-bold text-foreground md:text-5xl">
+          <div className="grid gap-10 rounded-[32px] border border-border bg-card px-8 py-14 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="space-y-7">
+              <p className="text-base uppercase tracking-[0.4em] font-bold" style={{ color: '#2563eb' }}>Smarter monitoring</p>
+              <h1
+                className="text-5xl text-foreground md:text-6xl leading-tight"
+                style={{ fontFamily: "Arial, sans-serif", fontWeight: 400 }}
+              >
                 Smarter groundwater monitoring for rural India
               </h1>
-              <p className="text-lg text-muted-foreground">
+              <p
+                className="text-xl text-muted-foreground leading-relaxed"
+                style={{ fontFamily: "Arial, sans-serif", fontWeight: 400 }}
+              >
                 JalYantra is an IoT groundwater monitoring system designed for deep agricultural borewells
                 and open wells in drought-prone districts.
               </p>
-              <div className="space-y-2 text-sm text-muted-foreground">
+              <div className="space-y-3 text-base text-muted-foreground">
                 <p>
-                  <span className="font-semibold text-foreground">Problem:</span> Lack of continuous,
-                  local-level groundwater monitoring across seasons.
+                  <span className="font-bold" style={{ color: '#1e40af' }}>Problem:</span>{" "}
+                  Lack of continuous, local-level groundwater monitoring across seasons.
                 </p>
                 <p>
-                  <span className="font-semibold text-foreground">Solution:</span> LIDAR-based measurement
-                  with real-time dashboard insights for crop planning.
+                  <span className="font-bold" style={{ color: '#1e40af' }}>Solution:</span>{" "}
+                  LIDAR-based measurement with real-time dashboard insights for crop planning.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-3">
-                <Button asChild size="lg" className="rounded-full bg-[#0c7a61] hover:bg-[#0a6a54]">
+              <div className="flex flex-wrap gap-4">
+                <Button asChild size="lg" className="rounded-full px-8 py-3 text-base font-bold bg-blue-700 hover:bg-blue-800 shadow-lg">
                   <a href="/dashboard" onClick={navigateToDashboard}>
                     Go to Dashboard
                   </a>
@@ -185,7 +263,7 @@ export default function Home() {
                 <Button
                   variant="outline"
                   size="lg"
-                  className="rounded-full border-border"
+                  className="rounded-full border-2 border-blue-300 text-blue-700 hover:bg-blue-50 px-8 py-3 text-base font-bold"
                   onClick={() => scrollToSection("how-it-works")}
                 >
                   Learn how it works
@@ -207,81 +285,81 @@ export default function Home() {
         </section>
 
         <section className="container mx-auto space-y-8 px-4" id="how-it-works">
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">Insights that turn action</p>
-            <h2 className="text-3xl font-bold text-foreground">Insights that turn into action</h2>
-            <p className="text-sm text-muted-foreground">
-              Designed for farmers, NGOs, and panchayat stakeholders—clear visuals, simple language, and exportable evidence.
-            </p>
+          <div className="space-y-3">
+          <p className="section-heading-label">Insights that drive action</p>
+          <h2 className="section-heading-title">Insights that turn into action</h2>
+          <p className="section-heading-description">
+            Designed for farmers, NGOs, and panchayat stakeholders—clear visuals, simple language, and exportable evidence.
+          </p>
           </div>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
               {insightCards.map((card, index) => (
-                <div key={card.title} className="rounded-[24px] border border-border bg-card/70 p-5 shadow-sm">
+                <div key={card.title} className="rounded-[24px] border-2 border-blue-100 bg-card/70 p-6 shadow-md hover:shadow-lg hover:border-blue-300 transition-all">
                   {card.icon && (
                     <img
                       src={card.icon}
                       alt={`${card.title} icon`}
-                      className="mb-2 h-10 w-10"
+                      className="mb-3 h-14 w-14"
                     />
                   )}
-                  <p className="text-xs text-muted-foreground">0{index + 1}</p>
-                  <h3 className="text-lg font-semibold text-foreground">{card.title}</h3>
-                  <p className="text-sm text-muted-foreground">{card.description}</p>
+                  <p className="text-sm font-bold" style={{ color: '#3b82f6' }}>0{index + 1}</p>
+                  <h3 className="text-xl font-bold text-foreground mt-1">{card.title}</h3>
+                  <p className="text-base text-muted-foreground mt-2 leading-relaxed">{card.description}</p>
                 </div>
               ))}
           </div>
         </section>
 
         <section className="container mx-auto space-y-8 px-4" id="dashboard">
-          <div className="space-y-2 text-center">
-            <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">Dashboard</p>
-            <h2 className="text-3xl font-bold text-foreground">What users see</h2>
-            <p className="text-sm text-muted-foreground">
+          <div className="space-y-3 text-center">
+            <p className="text-base uppercase tracking-[0.4em] font-bold" style={{ color: '#2563eb' }}>Dashboard</p>
+            <h2 className="text-4xl font-bold text-foreground">What users see</h2>
+            <p className="text-lg text-muted-foreground leading-relaxed">
               A clean summary for quick decisions—then drill down to districts, locations, graphs, and exportable history.
             </p>
           </div>
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-5 md:grid-cols-4">
             {dashboardStats.map((stat) => (
-              <div key={stat.label} className="rounded-[24px] border border-border bg-card/80 p-4 text-sm text-muted-foreground">
-                <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">{stat.label}</p>
-                <p className="mt-2 text-2xl font-bold text-foreground">{stat.value}</p>
-                <p className="text-xs text-muted-foreground">{stat.note}</p>
+              <div key={stat.label} className="rounded-[24px] border-2 border-blue-100 bg-gradient-to-br from-blue-50 to-white p-6 text-muted-foreground shadow-md">
+                <p className="text-sm uppercase tracking-[0.3em] font-semibold text-blue-500">{stat.label}</p>
+                <p className="mt-2 text-4xl font-extrabold" style={{ color: '#1e40af' }}>{stat.value}</p>
+                <p className="text-base text-muted-foreground mt-1">{stat.note}</p>
               </div>
             ))}
           </div>
-          <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-            <div className="rounded-[32px] border border-border bg-card/70 p-6">
-              <div className="flex items-center justify-between text-sm font-semibold text-foreground">
-                <span>Active Alerts</span>
-                <span className="text-xs text-muted-foreground">5</span>
+          <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-[32px] border-2 border-blue-100 bg-card/70 p-7">
+              <div className="flex items-center justify-between">
+                <span className="text-lg font-bold text-foreground">Active Alerts</span>
+                <span className="text-sm font-semibold bg-red-100 text-red-700 px-3 py-1 rounded-full">5 Active</span>
               </div>
-              <div className="mt-4 space-y-3 text-sm text-muted-foreground">
+              <div className="mt-5 space-y-3 text-muted-foreground">
                 {alertItems.map((alert) => (
-                  <p key={alert} className="rounded-2xl border border-[#f4c2c2] bg-[#fff5f5] px-4 py-3 text-xs text-[#a02e2e]">
-                    {alert}
+                  <p key={alert} className="rounded-2xl border border-[#f4c2c2] bg-[#fff5f5] px-5 py-4 text-sm font-medium text-[#a02e2e]">
+                    ⚠️ {alert}
                   </p>
                 ))}
               </div>
             </div>
-            <div className="rounded-[32px] border border-border bg-card/70 p-6">
-              <div className="mb-3 flex items-center justify-between">
+            <div className="rounded-[32px] border-2 border-blue-100 bg-card/70 p-7">
+              <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-foreground">Interactive Sensor Map</p>
-                  <p className="text-xs text-muted-foreground">Click markers for readings (placeholder)</p>
+                  <p className="text-lg font-bold text-foreground">Interactive Sensor Map</p>
+                  <p className="text-sm text-muted-foreground mt-1">Click markers for readings</p>
                 </div>
-                <span className="rounded-full border border-border px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                  4 sensors monitored
+                <span className="rounded-full border-2 border-blue-200 bg-blue-50 px-4 py-1.5 text-sm font-semibold text-blue-600">
+                  4 sensors
                 </span>
               </div>
               <img
                 src="/interactive-map.png"
                 alt="Interactive sensor map"
-                className="h-56 w-full rounded-[24px] object-cover"
+                className="h-64 w-full rounded-[24px] object-cover"
               />
-              <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.4em] text-muted-foreground">
-                <span>Layer: Sensor</span>
-                <span>Layer: Network</span>
-                <span>Drill-down: Location modal</span>
+              <div className="mt-4 flex flex-wrap gap-2 text-sm font-semibold uppercase tracking-[0.3em]" style={{ color: '#3b82f6' }}>
+                <span>📍 Layer: Sensor</span>
+                <span>🌐 Layer: Network</span>
+                <span>🔍 Drill-down modal</span>
               </div>
             </div>
           </div>
@@ -350,54 +428,67 @@ export default function Home() {
         )}
 
         <section className="container mx-auto space-y-8 px-4" id="contact">
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">Contact</p>
-            <div className="flex items-center gap-3">
+          <div className="space-y-3">
+            <p className="text-base uppercase tracking-[0.4em] font-bold" style={{ color: '#2563eb' }}>Contact</p>
+            <div className="flex items-center gap-4">
               <img
                 src="/logo.jpeg"
                 alt="JalYantra logo"
-                className="h-10 w-10 rounded-full object-cover"
+                className="h-16 w-16 rounded-2xl object-cover ring-2 ring-blue-200 shadow-md"
               />
-              <h2 className="text-3xl font-bold text-foreground">Run a pilot with us</h2>
+              <h2 className="text-4xl font-bold text-foreground">Run a pilot with us</h2>
             </div>
-            <p className="text-sm text-muted-foreground">
-              If you’re an NGO, CSR team, research group, or panchayat network working on drought resilience, we can set up a pilot and track clear impact outcomes.
+            <p className="text-lg text-muted-foreground leading-relaxed">
+              If you're an NGO, CSR team, research group, or panchayat network working on drought resilience, we can set up a pilot and track clear impact outcomes.
             </p>
           </div>
-          <div className="grid gap-6 rounded-[32px] border border-border bg-card/80 p-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <div className="space-y-4">
-              <div className="rounded-[24px] border border-border bg-muted/60 p-5 text-sm text-muted-foreground">
-                <p className="font-semibold text-foreground">Pilot needs (example)</p>
-                <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
+          <div className="grid gap-8 rounded-[32px] border-2 border-blue-100 bg-card/80 p-8 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="space-y-5">
+              <div className="contact-card">
+                <p className="text-base font-bold text-white uppercase tracking-[0.4em]">Pilot needs</p>
+                <ul className="mt-4 list-disc space-y-3 pl-5 text-base">
                   <li>Access to borewells + farmer consent</li>
                   <li>Coordination for installation & community meetings</li>
                   <li>Baseline + follow-up monitoring to evaluate impact</li>
                 </ul>
+                <p className="contact-note mt-5">
+                  Email us at <span>support@jalyantra.tech</span>
+                </p>
+                <p className="contact-note">
+                  Location: <span>Maharashtra (pilot geographies)</span>
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Email: <span className="font-semibold text-foreground">hello@jalyantra.org</span> (placeholder)
-                <br />
-                Location: <span className="font-semibold text-foreground">Maharashtra</span> (pilot geographies)
-              </p>
             </div>
-            <form className="space-y-4" onSubmit={handleFormSubmit}>
+            <form className="space-y-4" onSubmit={handleContactSubmit}>
               <input
                 type="text"
-                placeholder="Name"
-                className="w-full rounded-[18px] border border-border bg-card/60 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground"
+                placeholder="Your Name"
+                name="name"
+                value={contactInfo.name}
+                onChange={handleContactChange}
+                className="w-full rounded-[18px] border-2 border-blue-100 bg-card/60 px-5 py-4 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-400"
               />
               <input
                 type="text"
                 placeholder="Organization"
-                className="w-full rounded-[18px] border border-border bg-card/60 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground"
+                name="organization"
+                value={contactInfo.organization}
+                onChange={handleContactChange}
+                className="w-full rounded-[18px] border-2 border-blue-100 bg-card/60 px-5 py-4 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-400"
               />
               <input
                 type="email"
-                placeholder="Email"
-                className="w-full rounded-[18px] border border-border bg-card/60 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground"
+                placeholder="support@jalyantra.tech"
+                name="email"
+                value={contactInfo.email}
+                onChange={handleContactChange}
+                className="w-full rounded-[18px] border-2 border-blue-100 bg-card/60 px-5 py-4 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-400"
               />
               <select
-                className="w-full rounded-[18px] border border-border bg-card/60 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground"
+                name="interest"
+                value={contactInfo.interest}
+                onChange={handleContactChange}
+                className="w-full rounded-[18px] border-2 border-blue-100 bg-card/60 px-5 py-4 text-base text-foreground focus:outline-none focus:border-blue-400"
               >
                 <option>Interested in…</option>
                 <option>Dashboards & alerts</option>
@@ -406,14 +497,23 @@ export default function Home() {
               </select>
               <textarea
                 placeholder="Tell us your district(s), number of borewells, and what outcomes you want to measure."
-                className="h-24 w-full rounded-[18px] border border-border bg-card/60 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground"
+                name="details"
+                value={contactInfo.details}
+                onChange={handleContactChange}
+                className="h-28 w-full rounded-[18px] border-2 border-blue-100 bg-card/60 px-5 py-4 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-400"
               />
-              <Button className="w-full rounded-full bg-[#0c7a61] text-sm font-semibold uppercase tracking-[0.3em]">
-                Send
+              <Button className="w-full rounded-full bg-blue-700 hover:bg-blue-800 text-base font-bold uppercase tracking-[0.3em] py-6 shadow-md">
+                {status === "sending" ? "Sending..." : "Send Message"}
               </Button>
-              <p className="text-[11px] text-muted-foreground">
-                This is a design mock—connect to your backend later.
-              </p>
+              {status !== "idle" && (
+                <p
+                  className={
+                    status === "sent" ? "text-green-700" : "text-red-600"
+                  }
+                >
+                  {statusMessage}
+                </p>
+              )}
             </form>
           </div>
         </section>

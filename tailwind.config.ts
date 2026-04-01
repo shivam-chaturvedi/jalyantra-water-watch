@@ -14,8 +14,9 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['IBM Plex Sans', 'system-ui', 'sans-serif'],
-        mono: ['IBM Plex Mono', 'monospace'],
+        sans: ['Inter', 'Poppins', 'system-ui', 'sans-serif'],
+        display: ['Poppins', 'Inter', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -69,14 +70,18 @@ export default {
         },
       },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        lg: "16px",
+        md: "12px",
+        sm: "8px",
+        xl: "20px",
+        '2xl': "24px",
+        '3xl': "32px",
       },
       boxShadow: {
-        'card': 'var(--shadow-card)',
-        'elevated': 'var(--shadow-elevated)',
-        'map': 'var(--shadow-map)',
+        'card':     '0 1px 3px 0 rgba(0,0,0,0.04), 0 4px 20px rgba(0,0,0,0.05)',
+        'elevated': '0 4px 20px rgba(0,0,0,0.08), 0 8px 32px rgba(0,0,0,0.06)',
+        'map':      '0 0 0 1px #e2e8f0, 0 4px 24px -8px rgba(15,23,42,0.12)',
+        'teal':     '0 4px 20px rgba(14,165,164,0.25)',
       },
       keyframes: {
         "accordion-down": {

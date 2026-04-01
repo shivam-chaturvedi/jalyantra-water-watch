@@ -15,7 +15,8 @@ interface KPICardProps {
   icon: LucideIcon;
   trend?: 'up' | 'down' | 'neutral';
   trendValue?: string;
-  variant?: 'default' | 'warning' | 'critical' | 'accent';
+  accentColor?: string;
+  accentBg?: string;
   delay?: number;
 }
 
@@ -26,52 +27,85 @@ function KPICard({
   icon: Icon,
   trend,
   trendValue,
-  variant = 'default',
-  delay = 0
+  accentColor = '#0ea5a4',
+  accentBg = 'rgba(14,165,164,0.10)',
+  delay = 0,
 }: KPICardProps) {
-  const variantStyles = {
-    default: 'border-border',
-    warning: 'border-l-4 border-l-depth-warning border-t-border border-r-border border-b-border bg-depth-warning/5',
-    critical: 'border-l-4 border-l-depth-critical border-t-border border-r-border border-b-border bg-depth-critical/5',
-    accent: 'border-l-4 border-l-accent border-t-border border-r-border border-b-border bg-accent/5',
-  };
-
-  const iconStyles = {
-    default: 'bg-secondary text-foreground',
-    warning: 'bg-depth-warning/15 text-depth-warning',
-    critical: 'bg-depth-critical/15 text-depth-critical',
-    accent: 'bg-accent/15 text-accent',
-  };
-
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, delay }}
-      className={cn("kpi-card", variantStyles[variant])}
+      transition={{ duration: 0.3, delay, ease: 'easeOut' }}
+      className="kpi-card"
+      style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0' }}
     >
-      <div className="flex items-start justify-between mb-4">
-        <div className={cn("w-9 h-9 flex items-center justify-center", iconStyles[variant])} style={{ borderRadius: '0.25rem' }}>
-          <Icon className="w-4 h-4" />
+      {/* Icon + Trend */}
+      <div className="flex items-start justify-between mb-5">
+        {/* Circular icon */}
+        <div
+          className="icon-circle"
+          style={{ background: accentBg, width: 48, height: 48 }}
+        >
+          <Icon style={{ width: 22, height: 22, color: accentColor }} />
         </div>
+
+        {/* Trend badge */}
         {trend && trendValue && (
-          <div className={cn(
-            "flex items-center gap-1 text-[10px] font-semibold px-2 py-1 uppercase tracking-wide",
-            trend === 'down' ? 'bg-depth-critical/10 text-depth-critical' :
-              trend === 'up' ? 'bg-depth-safe/10 text-depth-safe' :
-                'bg-muted text-muted-foreground'
-          )} style={{ borderRadius: '0.25rem' }}>
-            <TrendingDown className={cn("w-3 h-3", trend === 'up' && "rotate-180")} />
+          <div
+            className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide"
+            style={{
+              background: trend === 'down'
+                ? 'rgba(239,68,68,0.1)'
+                : trend === 'up'
+                  ? 'rgba(34,197,94,0.1)'
+                  : 'rgba(100,116,139,0.1)',
+              color: trend === 'down' ? '#ef4444' : trend === 'up' ? '#22c55e' : '#64748b',
+            }}
+          >
+            <TrendingDown
+              style={{ width: 10, height: 10, transform: trend === 'up' ? 'rotate(180deg)' : 'none' }}
+            />
             {trendValue}
           </div>
         )}
       </div>
 
+      {/* Value block */}
       <div className="space-y-1">
-        <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{title}</p>
-        <p className="text-2xl font-bold text-foreground tracking-tight font-mono">{value}</p>
-        <p className="text-xs text-muted-foreground">{subtitle}</p>
+        <p
+          style={{
+            fontSize: '11px',
+            fontFamily: 'Inter, sans-serif',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            color: '#94a3b8',
+          }}
+        >
+          {title}
+        </p>
+        <p
+          style={{
+            fontSize: '28px',
+            fontFamily: 'Poppins, Inter, sans-serif',
+            fontWeight: 700,
+            color: '#0f172a',
+            lineHeight: 1.1,
+            letterSpacing: '-0.02em',
+          }}
+        >
+          {value}
+        </p>
+        <p style={{ fontSize: '13px', color: '#64748b', fontFamily: 'Inter, sans-serif' }}>
+          {subtitle}
+        </p>
       </div>
+
+      {/* Bottom accent bar */}
+      <div
+        className="mt-4 h-0.5 rounded-full"
+        style={{ background: `linear-gradient(90deg, ${accentColor}60, transparent)` }}
+      />
     </motion.div>
   );
 }
@@ -81,12 +115,16 @@ export function KPICards({ stats, isLoading }: KPICardsProps) {
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="kpi-card animate-pulse">
-            <div className="w-10 h-10 rounded-lg bg-muted mb-3" />
+          <div
+            key={i}
+            className="kpi-card animate-pulse"
+            style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0' }}
+          >
+            <div className="w-12 h-12 rounded-full bg-[#f1f5f9] mb-5" />
             <div className="space-y-2">
-              <div className="h-4 w-24 bg-muted rounded" />
-              <div className="h-8 w-16 bg-muted rounded" />
-              <div className="h-3 w-32 bg-muted rounded" />
+              <div className="h-3 w-24 bg-[#f1f5f9] rounded-full" />
+              <div className="h-8 w-20 bg-[#f1f5f9] rounded-full" />
+              <div className="h-3 w-32 bg-[#f1f5f9] rounded-full" />
             </div>
           </div>
         ))}
@@ -101,7 +139,8 @@ export function KPICards({ stats, isLoading }: KPICardsProps) {
         value={stats.totalSensors}
         subtitle="Monitored locations"
         icon={Activity}
-        variant="accent"
+        accentColor="#0ea5a4"
+        accentBg="rgba(14,165,164,0.10)"
         delay={0}
       />
       <KPICard
@@ -111,16 +150,18 @@ export function KPICards({ stats, isLoading }: KPICardsProps) {
         icon={Waves}
         trend={stats.avgDepth > 15 ? 'down' : 'neutral'}
         trendValue={stats.avgDepth > 15 ? 'High' : 'Normal'}
-        variant={stats.avgDepth > 15 ? 'warning' : 'default'}
-        delay={0.1}
+        accentColor={stats.avgDepth > 15 ? '#f97316' : '#06b6d4'}
+        accentBg={stats.avgDepth > 15 ? 'rgba(249,115,22,0.10)' : 'rgba(6,182,212,0.10)'}
+        delay={0.08}
       />
       <KPICard
         title="Critical Districts"
         value={`${stats.criticalPercentage}%`}
         subtitle="Above 20m depth threshold"
         icon={AlertTriangle}
-        variant={stats.criticalPercentage > 20 ? 'critical' : 'default'}
-        delay={0.2}
+        accentColor={stats.criticalPercentage > 20 ? '#ef4444' : '#22c55e'}
+        accentBg={stats.criticalPercentage > 20 ? 'rgba(239,68,68,0.10)' : 'rgba(34,197,94,0.10)'}
+        delay={0.16}
       />
       <KPICard
         title="Fastest Decline"
@@ -129,8 +170,9 @@ export function KPICards({ stats, isLoading }: KPICardsProps) {
         icon={TrendingDown}
         trend="down"
         trendValue={`-${stats.fastestDeclineRate}m`}
-        variant="critical"
-        delay={0.3}
+        accentColor="#ef4444"
+        accentBg="rgba(239,68,68,0.10)"
+        delay={0.24}
       />
     </div>
   );

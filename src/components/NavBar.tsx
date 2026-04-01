@@ -42,35 +42,51 @@ export function NavBar({
 }: NavBarProps) {
   return (
     <nav className="nav-bar">
-      <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
-        {/* Logo & Brand - Squared Professional */}
-        <Link to="/" className="flex items-center gap-3">
+      <div className="container mx-auto px-6 h-[68px] flex items-center justify-between gap-4">
+
+        {/* Logo & Brand */}
+        <Link to="/" className="flex items-center gap-3 shrink-0">
           <img
             src="/logo.jpeg"
             alt="JalYantra Logo"
-            className="w-16 h-16 object-cover"
-            style={{ borderRadius: '0.25rem' }}
+            className="w-20 h-20 object-cover rounded-2xl ring-2 ring-blue-200 shadow-md"
           />
           <div>
-            <h1 className="text-base font-bold text-foreground tracking-tight">JALYANTRA</h1>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest -mt-0.5">
+            <h1
+              className="text-xl font-bold tracking-tight"
+              style={{ fontFamily: 'Poppins, Inter, sans-serif', color: '#1e40af', fontSize: '20px', letterSpacing: '-0.01em', lineHeight: 1 }}
+            >
+              JALYANTRA
+            </h1>
+            <p
+              className="text-sm uppercase tracking-widest mt-0.5 font-medium"
+              style={{ color: '#64748b' }}
+            >
               Groundwater Intelligence
             </p>
           </div>
-          <div className="flex flex-col text-right text-xs uppercase tracking-wide text-muted-foreground">
-            <span className="text-[9px]">Active sensors</span>
-            <p className="text-lg font-semibold text-foreground">{activeSensors}</p>
+          {/* Active sensors pill */}
+          <div
+            className="hidden sm:flex flex-col items-center justify-center px-3 py-1 rounded-full text-white text-xs font-semibold"
+            style={{ background: 'linear-gradient(135deg, #0ea5a4, #0f766e)', fontSize: '11px' }}
+          >
+            <span style={{ fontSize: '9px', opacity: 0.85, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Active</span>
+            <span style={{ fontSize: '15px', fontWeight: 700, lineHeight: 1 }}>{activeSensors}</span>
           </div>
         </Link>
 
         {/* Controls */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+
           {/* Location Selector */}
           <Select value={selectedLocation} onValueChange={onLocationChange}>
-            <SelectTrigger className="w-[160px] h-8 text-xs font-medium">
+            <SelectTrigger
+              className="h-9 text-xs font-medium border-[#e2e8f0] bg-white rounded-xl"
+              style={{ width: '160px', fontFamily: 'Inter, sans-serif' }}
+            >
               <SelectValue placeholder="Select Location" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="rounded-xl">
               <SelectItem value="all-locations">All Locations</SelectItem>
               {locationOptions.map((location) => (
                 <SelectItem key={location} value={location}>
@@ -82,10 +98,13 @@ export function NavBar({
 
           {/* Date Selector */}
           <Select value={selectedDate} onValueChange={onDateChange}>
-            <SelectTrigger className="w-[130px] h-8 text-xs font-medium hidden sm:flex">
+            <SelectTrigger
+              className="h-9 text-xs font-medium border-[#e2e8f0] bg-white rounded-xl hidden sm:flex"
+              style={{ width: '130px', fontFamily: 'Inter, sans-serif' }}
+            >
               <SelectValue placeholder="Date" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="rounded-xl">
               <SelectItem value="all-dates">All Dates</SelectItem>
               {dateOptions.map((date) => (
                 <SelectItem key={date} value={date}>
@@ -95,33 +114,40 @@ export function NavBar({
             </SelectContent>
           </Select>
 
-          {/* Separator */}
-          <div className="hidden sm:block w-px h-6 bg-border mx-1" />
+          <div className="hidden sm:block w-px h-6 bg-[#e2e8f0] mx-1" />
 
           {/* Live Toggle */}
           <Button
-            variant={isLive ? "default" : "outline"}
+            variant={isLive ? 'default' : 'outline'}
             size="sm"
             onClick={() => onLiveToggle(!isLive)}
             className={cn(
-              "h-8 gap-2 text-xs font-semibold uppercase tracking-wide",
-              isLive && "bg-accent hover:bg-accent/90"
+              'h-9 gap-2 text-xs font-semibold rounded-xl px-4',
+              isLive
+                ? 'text-white border-transparent'
+                : 'border-[#e2e8f0] text-[#64748b] hover:border-[#0ea5a4] hover:text-[#0ea5a4]'
             )}
+            style={isLive ? { background: 'linear-gradient(135deg, #0ea5a4, #0f766e)' } : {}}
           >
-            <span className="relative flex h-1.5 w-1.5">
+            <span className="relative flex h-2 w-2">
               {isLive && (
-                <span className="animate-ping absolute inline-flex h-full w-full bg-accent-foreground opacity-75" style={{ borderRadius: '1px' }} />
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-70" />
               )}
               <span className={cn(
-                "relative inline-flex h-1.5 w-1.5",
-                isLive ? "bg-accent-foreground" : "bg-muted-foreground"
-              )} style={{ borderRadius: '1px' }} />
+                'relative inline-flex h-2 w-2 rounded-full',
+                isLive ? 'bg-white' : 'bg-[#94a3b8]'
+              )} />
             </span>
             <span className="hidden sm:inline">Live</span>
           </Button>
 
           {/* Refresh */}
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={onRefresh}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-9 w-9 rounded-xl border-[#e2e8f0] text-[#64748b] hover:border-[#0ea5a4] hover:text-[#0ea5a4]"
+            onClick={onRefresh}
+          >
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
 
@@ -129,29 +155,35 @@ export function NavBar({
           <Button
             variant="outline"
             size="sm"
-            className="h-8 gap-1.5 text-xs font-semibold uppercase tracking-wide hidden md:flex"
+            className="h-9 gap-1.5 text-xs font-semibold rounded-xl px-4 border-[#e2e8f0] text-[#64748b] hover:border-[#0ea5a4] hover:text-[#0ea5a4] hidden md:flex"
             onClick={onExport}
             disabled={!onExport}
           >
             <Download className="h-3.5 w-3.5" />
             Export
           </Button>
+
           <div className="hidden md:flex">
             <GoogleTranslateDropdown className="max-w-[220px]" />
           </div>
         </div>
-
       </div>
 
       {/* Last Updated Strip */}
       {lastUpdated && (
-        <div className="border-t border-border bg-muted/30 px-4 py-1">
-          <div className="container mx-auto flex items-center justify-between text-[10px] text-muted-foreground uppercase tracking-wide">
-            <span className="font-medium">
-              Last Sync: <span className="font-mono text-foreground">{lastUpdated.toLocaleTimeString()}</span>
+        <div
+          className="border-t px-6 py-1.5"
+          style={{ borderColor: '#e2e8f0', background: 'rgba(14,165,164,0.04)' }}
+        >
+          <div className="container mx-auto flex items-center justify-between" style={{ fontSize: '10px', color: '#94a3b8', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            <span style={{ fontWeight: 500 }}>
+              Last Sync:{' '}
+              <span style={{ fontFamily: 'ui-monospace, monospace', color: '#0f172a', fontWeight: 600 }}>
+                {lastUpdated.toLocaleTimeString()}
+              </span>
             </span>
             <span className="flex items-center gap-1.5">
-              <Radio className="h-3 w-3 text-accent" />
+              <Radio className="h-3 w-3" style={{ color: '#0ea5a4' }} />
               {isLive ? 'Auto-refresh enabled' : 'Manual refresh mode'}
             </span>
           </div>
