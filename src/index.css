@@ -435,7 +435,7 @@
 }
 
 .contact-card {
-  background: linear-gradient(135deg, #0f172a, #1e3a8a);
+  background: linear-gradient(135deg, #0f766e, #14b8a6);
   border-radius: 20px;
   padding: 28px;
   border: 1px solid rgba(255, 255, 255, 0.35);
@@ -601,4 +601,46 @@ body { top: 0px !important; }
   padding: 12px 16px;
   font-size: 14px;
   color: var(--text-light);
+}
+
+/* ─── Wave Animation ─────────────────────────────────────────────────────────── */
+.waves-container {
+  width: 100%;
+  height: 20vh;
+  min-height: 130px;
+  max-height: 220px;
+  margin-bottom: -7px; /* Fix for safari gap */
+  position: relative;
+  overflow: hidden;
+}
+
+.parallax > use {
+  animation: move-forever 25s cubic-bezier(.55,.5,.45,.5) infinite;
+}
+
+/* We will reuse the same wave path, but with varied delays, durations, and opacities/fill colors. */
+.parallax > use:nth-child(1) {
+  animation-delay: -2s;
+  animation-duration: 7s;
+  fill: rgba(8, 145, 178, 0.7); /* cyan-600 */
+}
+.parallax > use:nth-child(2) {
+  animation-delay: -3s;
+  animation-duration: 10s;
+  fill: rgba(6, 182, 212, 0.5); /* cyan-500 */
+}
+.parallax > use:nth-child(3) {
+  animation-delay: -4s;
+  animation-duration: 13s;
+  fill: rgba(34, 211, 238, 0.3); /* cyan-400 */
+}
+.parallax > use:nth-child(4) {
+  animation-delay: -5s;
+  animation-duration: 20s;
+  fill: #f8fafc; /* Color that matches the background of the section below it */
+}
+
+@keyframes move-forever {
+  0% { transform: translate3d(-90px, 0, 0); }
+  100% { transform: translate3d(85px, 0, 0); }
 }
