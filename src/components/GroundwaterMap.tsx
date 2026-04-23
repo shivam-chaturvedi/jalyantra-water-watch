@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { SensorReading, District, getDepthRiskLevel, getRiskColorClass } from '@/lib/data';
+import {
+  SensorReading,
+  District,
+  formatLastSyncDate,
+  getDepthRiskLevel,
+  getRiskColorClass,
+} from '@/lib/data';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
@@ -173,10 +179,10 @@ export function GroundwaterMap({
                         {sensor.status === 'active' ? 'Active' : 'Offline'}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Last Sync</span>
-                      <span className="font-medium font-mono text-foreground">
-                        {new Date(sensor.lastSync).toLocaleTimeString()}
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-muted-foreground shrink-0">Last sync</span>
+                      <span className="font-medium text-right text-foreground text-xs leading-tight">
+                        {formatLastSyncDate(sensor)}
                       </span>
                     </div>
                   </div>

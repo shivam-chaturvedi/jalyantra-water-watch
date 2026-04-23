@@ -4,10 +4,12 @@ export function downloadDataAsCsv<T extends Record<string, unknown>>(filename: s
     return;
   }
 
-  const headers = Array.from(rows.reduce<Set<string>>((set, row) => {
-    Object.keys(row).forEach((key) => set.add(key));
-    return set;
-  }, new Set<string>()));
+  const headers = Array.from(
+    rows.reduce<Set<string>>((set, row) => {
+      Object.keys(row).forEach((key) => set.add(key));
+      return set;
+    }, new Set<string>()),
+  ).sort((a, b) => a.localeCompare(b));
 
   const csvContent = [
     headers.join(','),

@@ -1,11 +1,233 @@
+/** Known RTDB fields; Firebase may include additional keys — those are preserved in `rtdbExport`. */
 export interface FirebaseReadingEntry {
   collectedDate?: string;
+  collectedDateTime?: string;
   depth?: number;
   deviceId?: string;
   lat?: number;
   long?: number;
   district?: string;
+  lastSeen?: string;
+  deviceOnlineSince?: string;
   timestamp?: number;
+  triggerSource?: string;
+  uptimeSeconds?: number;
+  siteName?: string;
+  remarks?: string;
+  averageSampleCount?: number;
+  installerCompany?: string;
+  installerName?: string;
+  installerPhone?: string;
+}
+
+export type RtdbCsvRow = Record<string, string | number | boolean | null>;
+
+/** Flatten one RTDB reading for CSV: every primitive (and JSON for nested) + `firebasePushId` = child key under device batch. */
+export function rtdbReadingToExportRow(firebasePushId: string, entry: Record<string, unknown> | null | undefined): RtdbCsvRow {
+  const out: RtdbCsvRow = {};
+  if (entry && typeof entry === 'object') {
+    for (const [k, v] of Object.entries(entry)) {
+      if (v === undefined) continue;
+      if (v === null) {
+        out[k] = null;
+        continue;
+      }
+      if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+        out[k] = v;
+        continue;
+      }
+      try {
+        out[k] = JSON.stringify(v);
+      } catch {
+        out[k] = String(v);
+      }
+    }
+  }
+  out.firebasePushId = firebasePushId;
+  return out;
+}
+
+/** One CSV row per history point — uses stored RTDB snapshot when present. */
+export function sensorHistoryPointsToCsvRows(points: SensorHistoryPoint[]): RtdbCsvRow[] {
+  return points.map((p) =>
+    p.rtdbExport != null ? { ...p.rtdbExport } : historyPointFallbackCsvRow(p),
+  );
+}
+
+function historyPointFallbackCsvRow(p: SensorHistoryPoint): RtdbCsvRow {
+  const row: RtdbCsvRow = {
+    firebasePushId: p.id,
+    collectedDate: p.collectedDate,
+    depth: p.depth,
+  };
+  if (p.collectedDateTime != null) row.collectedDateTime = p.collectedDateTime;
+  if (p.deviceOnlineSince != null) row.deviceOnlineSince = p.deviceOnlineSince;
+  if (p.triggerSource != null) row.triggerSource = p.triggerSource;
+  if (p.uptimeSeconds != null) row.uptimeSeconds = p.uptimeSeconds;
+  return row;
+}
+
+/** Latest reading per sensor for dashboard export (RTDB columns only when snapshot exists). */
+export function sensorsDashboardExportRows(sensors: SensorReading[]): RtdbCsvRow[] {
+  return sensors.map((s) =>
+    s.latestRtdbExport != null ? { ...s.latestRtdbExport } : sensorSummaryFallbackCsvRow(s),
+  );
+}
+
+function sensorSummaryFallbackCsvRow(s: SensorReading): RtdbCsvRow {
+  const row: RtdbCsvRow = {
+    deviceId: s.deviceId,
+    collectedDate: s.collectedDate,
+    depth: s.depth,
+    lat: s.lat,
+    long: s.long,
+  };
+  if (s.lastCollectedDateTime != null) row.collectedDateTime = s.lastCollectedDateTime;
+  return row;
+}
+
+const PLAUSIBLE_MS_MIN = Date.UTC(2020, 0, 1);
+const PLAUSIBLE_MS_MAX = Date.UTC(2038, 0, 1);
+
+function tryParseInstant(s: string | undefined): number | null {
+  if (!s?.trim()) return null;
+  const t = Date.parse(s.trim());
+  return Number.isNaN(t) ? null : t;
+}
+
+/** RTDB child key is sometimes a Unix time: `1773752363` (s) or ms (13 digits). Uses path’s last segment. */
+export function instantFromRtdbChildKey(childKey: string): number | null {
+  const segment = childKey.includes('/') ? (childKey.split('/').pop() ?? childKey) : childKey;
+  if (!/^\d{10,13}$/.test(segment)) return null;
+  const n = Number(segment);
+  if (!Number.isFinite(n)) return null;
+  const ms = n < 1e12 ? n * 1000 : n;
+  if (ms >= PLAUSIBLE_MS_MIN && ms <= PLAUSIBLE_MS_MAX) return ms;
+  return null;
+}
+
+function isLikelyReadingRow(obj: Record<string, unknown>): boolean {
+  return (
+    typeof obj.depth === 'number' &&
+    typeof obj.lat === 'number' &&
+    typeof obj.long === 'number'
+  );
+}
+
+const MAX_READING_NEST_DEPTH = 8;
+
+function expandReadingLeaves(
+  node: unknown,
+  keyPrefix: string,
+  depth: number,
+): { leafKey: string; entry: Record<string, unknown> }[] {
+  if (depth > MAX_READING_NEST_DEPTH || !node || typeof node !== 'object' || Array.isArray(node)) return [];
+  const o = node as Record<string, unknown>;
+  const out: { leafKey: string; entry: Record<string, unknown> }[] = [];
+  for (const [k, v] of Object.entries(o)) {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) continue;
+    const vo = v as Record<string, unknown>;
+    const path = keyPrefix ? `${keyPrefix}/${k}` : k;
+    if (isLikelyReadingRow(vo)) {
+      out.push({ leafKey: path, entry: vo });
+    } else {
+      out.push(...expandReadingLeaves(vo, path, depth + 1));
+    }
+  }
+  return out;
+}
+
+/** One device batch: either a map of readings, a single reading object, or nested folders of readings. */
+function leavesForDeviceBatch(
+  batchKey: string,
+  batch: FirebaseDeviceBatch,
+): { leafKey: string; entry: Record<string, unknown> }[] {
+  if (!batch || typeof batch !== 'object') return [];
+  const b = batch as Record<string, unknown>;
+  if (isLikelyReadingRow(b)) {
+    return [{ leafKey: batchKey, entry: b }];
+  }
+  return expandReadingLeaves(b, '', 0);
+}
+
+/**
+ * Sample instant for ordering & charts. Uses `collectedDateTime`, `collectedDate`, RTDB **child key** when it is Unix
+ * epoch (common in your DB), then other fields.
+ */
+export function readingInstantMs(entry: FirebaseReadingEntry, rtdbChildKey?: string): number {
+  let t = tryParseInstant(entry.collectedDateTime);
+  if (t != null) return t;
+
+  const cd = entry.collectedDate?.trim();
+  if (cd && !/^\d{4}-\d{2}-\d{2}$/.test(cd)) {
+    t = tryParseInstant(cd);
+    if (t != null) return t;
+  }
+
+  if (rtdbChildKey) {
+    t = instantFromRtdbChildKey(rtdbChildKey);
+    if (t != null) return t;
+  }
+
+  if (cd) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(cd)) {
+      const noon = Date.parse(`${cd}T12:00:00`);
+      if (!Number.isNaN(noon)) return noon;
+    }
+    t = tryParseInstant(cd);
+    if (t != null) return t;
+  }
+
+  t = tryParseInstant(entry.lastSeen);
+  if (t != null) return t;
+
+  t = tryParseInstant(entry.deviceOnlineSince);
+  if (t != null) return t;
+
+  if (typeof entry.timestamp === 'number' && Number.isFinite(entry.timestamp)) {
+    let ms = entry.timestamp;
+    if (ms > 0 && ms < 1e12) ms *= 1000;
+    if (ms >= PLAUSIBLE_MS_MIN && ms <= PLAUSIBLE_MS_MAX) return ms;
+  }
+
+  return Date.now();
+}
+
+/** Last sync line: show the actual sample date/time (no “As of …” / “Xh ago”). */
+export function formatLastSyncDate(
+  sensor: Pick<SensorReading, 'collectedDate' | 'lastSync' | 'lastCollectedDateTime'>,
+): string {
+  const iso = sensor.lastCollectedDateTime?.trim();
+  if (iso) {
+    const ms = Date.parse(iso);
+    if (Number.isFinite(ms)) {
+      return new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    }
+    return iso;
+  }
+
+  const raw = sensor.collectedDate?.trim();
+  if (raw) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      const ms = Date.parse(`${raw}T12:00:00`);
+      if (Number.isFinite(ms)) {
+        return new Date(ms).toLocaleDateString(undefined, { dateStyle: 'medium' });
+      }
+      return raw;
+    }
+    const ms = Date.parse(raw);
+    if (Number.isFinite(ms)) {
+      return new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    }
+    return raw;
+  }
+
+  const t = new Date(sensor.lastSync).getTime();
+  if (Number.isFinite(t)) {
+    return new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
+  return '—';
 }
 
 export type FirebaseDeviceBatch = Record<string, FirebaseReadingEntry | null> | null;
@@ -15,7 +237,15 @@ export interface SensorHistoryPoint {
   id: string;
   depth: number;
   collectedDate: string;
+  /** From Firebase `collectedDateTime` when present — used for chart tooltips. */
+  collectedDateTime?: string;
   timestamp: number;
+  /** Same power-on session across ~1 min samples within one pump run. */
+  deviceOnlineSince?: string;
+  triggerSource?: string;
+  uptimeSeconds?: number;
+  /** Full flattened RTDB row for dynamic CSV (all columns the device sent). */
+  rtdbExport?: RtdbCsvRow;
 }
 
 export interface SensorReading {
@@ -23,12 +253,17 @@ export interface SensorReading {
   deviceId: string;
   depth: number;
   collectedDate: string;
+  /** Latest sample’s `collectedDateTime` from Firebase when provided. */
+  lastCollectedDateTime?: string;
   lat: number;
   long: number;
   district: string;
   status: 'active' | 'offline';
   lastSync: string;
+  /** Latest reading’s flattened RTDB fields for dashboard CSV. */
+  latestRtdbExport?: RtdbCsvRow;
   history: SensorHistoryPoint[];
+  validationFlags?: string[];
 }
 
 export interface District {
@@ -144,70 +379,196 @@ function getDistrictCoordinates(districtName: string) {
   return { lat: 19.7515, long: 75.7139 };
 }
 
+/** Keep 0.01 m precision internally; coarser display rounding is applied only on pump drawdown charts. */
 function sanitizeDepth(value?: number): number {
   if (typeof value !== 'number' || Number.isNaN(value)) return 0;
-  return Math.round(value * 10) / 10;
+  return Math.round(value * 100) / 100;
+}
+
+const MIN_PLAUSIBLE_DEPTH = 0;
+const MAX_PLAUSIBLE_DEPTH = 60;
+const MAX_SUDDEN_JUMP_METERS = 1.5;
+const MAX_SUDDEN_JUMP_WINDOW_MS = 5 * 60 * 1000;
+
+function isPlausibleDepth(depth: number): boolean {
+  return depth >= MIN_PLAUSIBLE_DEPTH && depth <= MAX_PLAUSIBLE_DEPTH;
+}
+
+function formatTimeLabel(ms: number): string {
+  return new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+function detectSuddenAnomalies(points: ExtendedHistoryPoint[]): string[] {
+  const anomalies: string[] = [];
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const dt = curr.timestamp - prev.timestamp;
+    if (dt <= 0 || dt > MAX_SUDDEN_JUMP_WINDOW_MS) continue;
+    const delta = Math.abs(curr.depth - prev.depth);
+    if (delta >= MAX_SUDDEN_JUMP_METERS) {
+      anomalies.push(
+        `Sudden change of ${delta.toFixed(2)}m between ${formatTimeLabel(prev.timestamp)} and ${formatTimeLabel(
+          curr.timestamp,
+        )}`,
+      );
+    }
+  }
+  return anomalies;
+}
+
+function filterPlausibleHistoryPoints(points: ExtendedHistoryPoint[]): ExtendedHistoryPoint[] {
+  return points.filter((point) => isPlausibleDepth(point.depth));
+}
+
+function sortHistoryPoints(a: ExtendedHistoryPoint, b: ExtendedHistoryPoint): number {
+  const dt = a.timestamp - b.timestamp;
+  if (dt !== 0) return dt;
+  return a.id.localeCompare(b.id);
+}
+
+/** Multiple RTDB paths can reference the same `deviceId` (e.g. flat push keys); merge into one sensor. */
+function mergeSensorsByDeviceId(sensors: SensorReading[]): SensorReading[] {
+  const map = new Map<string, SensorReading>();
+  for (const s of sensors) {
+    const key = s.deviceId;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, { ...s, history: [...s.history], id: key });
+      continue;
+    }
+    existing.history = [...existing.history, ...s.history].sort(sortHistoryPoints);
+    const latest = existing.history[existing.history.length - 1];
+    existing.depth = latest.depth;
+    existing.collectedDate = latest.collectedDate;
+    existing.lastCollectedDateTime = latest.collectedDateTime ?? existing.lastCollectedDateTime;
+    existing.lat = latest.lat;
+    existing.long = latest.long;
+    existing.district = matchDistrictName(latest.lat, latest.long);
+    existing.status = getSensorStatusFromTimestamp(latest.timestamp);
+    existing.lastSync = new Date(latest.timestamp).toISOString();
+    existing.latestRtdbExport = latest.rtdbExport ? { ...latest.rtdbExport } : existing.latestRtdbExport;
+    if (s.validationFlags?.length) {
+      const existingFlags = existing.validationFlags ?? [];
+      existing.validationFlags = Array.from(new Set([...existingFlags, ...s.validationFlags]));
+    }
+  }
+  return Array.from(map.values());
+}
+
+function historyPointToSensorPayload(
+  historyPoints: ExtendedHistoryPoint[],
+  batchKey: string,
+): SensorReading | null {
+  if (!historyPoints.length) return null;
+  const plausibleHistory = filterPlausibleHistoryPoints(historyPoints);
+  const historyForSensor = plausibleHistory.length ? plausibleHistory : historyPoints;
+  const latest = historyForSensor[historyForSensor.length - 1];
+  const deviceId = latest.deviceId || batchKey;
+  const districtName = latest.district || matchDistrictName(latest.lat, latest.long);
+  const status = getSensorStatusFromTimestamp(latest.timestamp);
+  const validationFlags: string[] = [];
+  const invalidDepthCount = historyPoints.length - plausibleHistory.length;
+  if (invalidDepthCount > 0) {
+    validationFlags.push(
+      `Filtered ${invalidDepthCount} readings outside ${MIN_PLAUSIBLE_DEPTH}–${MAX_PLAUSIBLE_DEPTH}m range`,
+    );
+  }
+  const anomalyMessages = detectSuddenAnomalies(historyForSensor);
+  validationFlags.push(...anomalyMessages);
+
+  return {
+    id: batchKey,
+    deviceId,
+    depth: latest.depth,
+    collectedDate: latest.collectedDate,
+    ...(latest.collectedDateTime ? { lastCollectedDateTime: latest.collectedDateTime } : {}),
+    lat: latest.lat,
+    long: latest.long,
+    district: districtName,
+    status,
+    lastSync: new Date(latest.timestamp).toISOString(),
+    ...(latest.rtdbExport ? { latestRtdbExport: { ...latest.rtdbExport } } : {}),
+    ...(validationFlags.length ? { validationFlags } : {}),
+    history: historyForSensor.map(
+      ({
+        id,
+        depth,
+        collectedDate,
+        collectedDateTime,
+        timestamp,
+        deviceOnlineSince,
+        triggerSource,
+        uptimeSeconds,
+        rtdbExport,
+      }) => ({
+        id,
+        depth,
+        collectedDate,
+        ...(collectedDateTime ? { collectedDateTime } : {}),
+        timestamp,
+        ...(deviceOnlineSince ? { deviceOnlineSince } : {}),
+        ...(triggerSource ? { triggerSource } : {}),
+        ...(uptimeSeconds != null ? { uptimeSeconds } : {}),
+        ...(rtdbExport ? { rtdbExport: { ...rtdbExport } } : {}),
+      }),
+    ),
+  };
 }
 
 export function transformFirebaseReadings(raw: FirebaseReadings): SensorReading[] {
   if (!raw) return [];
 
-  return Object.entries(raw)
-    .map(([deviceKey, batch]) => {
-      if (!batch) return null;
+  const unmerged = Object.entries(raw)
+    .map(([batchKey, batch]) => {
+      const leaves = leavesForDeviceBatch(batchKey, batch);
+      if (!leaves.length) return null;
 
-      const historyPoints = Object.entries(batch)
-        .map(([entryId, entry]) => {
-          if (!entry) return null;
+      const historyPoints = leaves
+        .map(({ leafKey, entry }) => {
+          const en = entry as FirebaseReadingEntry;
+          const timestamp = readingInstantMs(en, leafKey);
+          if (en.depth == null || en.lat == null || en.long == null) return null;
 
-          const timestamp =
-            typeof entry.timestamp === 'number'
-              ? entry.timestamp
-              : entry.collectedDate
-                ? new Date(entry.collectedDate).getTime()
-                : Date.now();
-
-          if (entry.depth == null || entry.lat == null || entry.long == null) return null;
+          const collectedDateTime = en.collectedDateTime?.trim();
+          const rtdbExport = rtdbReadingToExportRow(leafKey, entry);
+          const deviceOnlineSince =
+            typeof en.deviceOnlineSince === 'string' && en.deviceOnlineSince.trim()
+              ? en.deviceOnlineSince.trim()
+              : undefined;
+          const triggerSource =
+            typeof en.triggerSource === 'string' && en.triggerSource.trim()
+              ? en.triggerSource.trim()
+              : undefined;
+          const uptimeSeconds =
+            typeof en.uptimeSeconds === 'number' && Number.isFinite(en.uptimeSeconds)
+              ? en.uptimeSeconds
+              : undefined;
 
           return {
-            id: entryId,
-            depth: sanitizeDepth(entry.depth),
-            collectedDate:
-              entry.collectedDate || new Date(timestamp).toISOString().split('T')[0],
+            id: leafKey,
+            depth: sanitizeDepth(en.depth),
+            collectedDate: en.collectedDate || new Date(timestamp).toISOString().split('T')[0],
+            ...(collectedDateTime ? { collectedDateTime } : {}),
             timestamp,
-            lat: entry.lat,
-            long: entry.long,
-            deviceId: entry.deviceId || deviceKey,
-            district: entry.district,
+            lat: en.lat,
+            long: en.long,
+            deviceId: en.deviceId || batchKey,
+            district: en.district,
+            ...(deviceOnlineSince ? { deviceOnlineSince } : {}),
+            ...(triggerSource ? { triggerSource } : {}),
+            ...(uptimeSeconds != null ? { uptimeSeconds } : {}),
+            rtdbExport,
           };
         })
         .filter((point): point is ExtendedHistoryPoint => point !== null)
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort(sortHistoryPoints);
 
-      if (!historyPoints.length) return null;
-
-      const latest = historyPoints[historyPoints.length - 1];
-      const deviceId = latest.deviceId || deviceKey;
-      const districtName = latest.district || matchDistrictName(latest.lat, latest.long);
-      const status = getSensorStatusFromTimestamp(latest.timestamp);
-
-      const finalLat = latest.lat;
-      const finalLong = latest.long;
-
-      return {
-        id: deviceKey,
-        deviceId,
-        depth: latest.depth,
-        collectedDate: latest.collectedDate,
-        lat: finalLat,
-        long: finalLong,
-        district: districtName,
-        status,
-        lastSync: new Date(latest.timestamp).toISOString(),
-        history: historyPoints.map(({ id, depth, collectedDate, timestamp }) => ({ id, depth, collectedDate, timestamp })),
-      };
+      return historyPointToSensorPayload(historyPoints, batchKey);
     })
     .filter((sensor): sensor is SensorReading => sensor !== null);
+
+  return mergeSensorsByDeviceId(unmerged);
 }
 
 export function calculateDistrictStats(readings: SensorReading[]): District[] {

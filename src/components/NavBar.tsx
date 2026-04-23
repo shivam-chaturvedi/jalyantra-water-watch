@@ -42,24 +42,25 @@ export function NavBar({
 }: NavBarProps) {
   return (
     <nav className="nav-bar">
-      <div className="container mx-auto px-6 h-[68px] flex items-center justify-between gap-4">
+      {/* ── Row 1: Logo + right controls ── */}
+      <div className="container mx-auto px-4 flex items-center justify-between gap-3 py-2 flex-wrap">
 
         {/* Logo & Brand */}
-        <Link to="/" className="flex items-center gap-3 shrink-0">
+        <Link to="/" className="flex items-center gap-2 shrink-0">
           <img
             src="/logo.jpeg"
             alt="JalYantra Logo"
-            className="w-20 h-20 object-cover rounded-2xl ring-2 ring-blue-200 shadow-md"
+            className="w-10 h-10 sm:w-14 sm:h-14 object-cover rounded-xl ring-2 ring-teal-200 shadow-md"
           />
           <div>
             <h1
-              className="text-xl font-bold tracking-tight"
-              style={{ fontFamily: 'Poppins, Inter, sans-serif', color: '#1e40af', fontSize: '20px', letterSpacing: '-0.01em', lineHeight: 1 }}
+              className="font-bold tracking-tight leading-none"
+              style={{ fontFamily: 'Poppins, Inter, sans-serif', color: '#0f766e', fontSize: '16px' }}
             >
               JALYANTRA
             </h1>
             <p
-              className="text-sm uppercase tracking-widest mt-0.5 font-medium"
+              className="text-[10px] uppercase tracking-widest font-medium hidden sm:block"
               style={{ color: '#64748b' }}
             >
               Groundwater Intelligence
@@ -67,24 +68,24 @@ export function NavBar({
           </div>
           {/* Active sensors pill */}
           <div
-            className="hidden sm:flex flex-col items-center justify-center px-3 py-1 rounded-full text-white text-xs font-semibold"
+            className="hidden sm:flex flex-col items-center justify-center px-2 py-1 rounded-full text-white"
             style={{ background: 'linear-gradient(135deg, #0ea5a4, #0f766e)', fontSize: '11px' }}
           >
             <span style={{ fontSize: '9px', opacity: 0.85, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Active</span>
-            <span style={{ fontSize: '15px', fontWeight: 700, lineHeight: 1 }}>{activeSensors}</span>
+            <span style={{ fontSize: '14px', fontWeight: 700, lineHeight: 1 }}>{activeSensors}</span>
           </div>
         </Link>
 
-        {/* Controls */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        {/* Right side controls — wrap on mobile */}
+        <div className="flex flex-wrap items-center gap-2">
 
           {/* Location Selector */}
           <Select value={selectedLocation} onValueChange={onLocationChange}>
             <SelectTrigger
-              className="h-9 text-xs font-medium border-[#e2e8f0] bg-white rounded-xl"
-              style={{ width: '160px', fontFamily: 'Inter, sans-serif' }}
+              className="h-8 text-xs font-medium border-[#e2e8f0] bg-white rounded-xl"
+              style={{ width: '130px', fontFamily: 'Inter, sans-serif' }}
             >
-              <SelectValue placeholder="Select Location" />
+              <SelectValue placeholder="Location" />
             </SelectTrigger>
             <SelectContent className="rounded-xl">
               <SelectItem value="all-locations">All Locations</SelectItem>
@@ -96,11 +97,11 @@ export function NavBar({
             </SelectContent>
           </Select>
 
-          {/* Date Selector */}
+          {/* Date Selector — hidden on xs, visible sm+ */}
           <Select value={selectedDate} onValueChange={onDateChange}>
             <SelectTrigger
-              className="h-9 text-xs font-medium border-[#e2e8f0] bg-white rounded-xl hidden sm:flex"
-              style={{ width: '130px', fontFamily: 'Inter, sans-serif' }}
+              className="h-8 text-xs font-medium border-[#e2e8f0] bg-white rounded-xl hidden sm:flex"
+              style={{ width: '120px', fontFamily: 'Inter, sans-serif' }}
             >
               <SelectValue placeholder="Date" />
             </SelectTrigger>
@@ -114,15 +115,13 @@ export function NavBar({
             </SelectContent>
           </Select>
 
-          <div className="hidden sm:block w-px h-6 bg-[#e2e8f0] mx-1" />
-
           {/* Live Toggle */}
           <Button
             variant={isLive ? 'default' : 'outline'}
             size="sm"
             onClick={() => onLiveToggle(!isLive)}
             className={cn(
-              'h-9 gap-2 text-xs font-semibold rounded-xl px-4',
+              'h-8 gap-1.5 text-xs font-semibold rounded-xl px-3',
               isLive
                 ? 'text-white border-transparent'
                 : 'border-[#e2e8f0] text-[#64748b] hover:border-[#0ea5a4] hover:text-[#0ea5a4]'
@@ -138,24 +137,24 @@ export function NavBar({
                 isLive ? 'bg-white' : 'bg-[#94a3b8]'
               )} />
             </span>
-            <span className="hidden sm:inline">Live</span>
+            Live
           </Button>
 
           {/* Refresh */}
           <Button
             variant="outline"
             size="icon"
-            className="h-9 w-9 rounded-xl border-[#e2e8f0] text-[#64748b] hover:border-[#0ea5a4] hover:text-[#0ea5a4]"
+            className="h-8 w-8 rounded-xl border-[#e2e8f0] text-[#64748b]"
             onClick={onRefresh}
           >
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
 
-          {/* Export */}
+          {/* Export — hidden on mobile */}
           <Button
             variant="outline"
             size="sm"
-            className="h-9 gap-1.5 text-xs font-semibold rounded-xl px-4 border-[#e2e8f0] text-[#64748b] hover:border-[#0ea5a4] hover:text-[#0ea5a4] hidden md:flex"
+            className="h-8 gap-1 text-xs font-semibold rounded-xl px-3 border-[#e2e8f0] text-[#64748b] hidden md:flex"
             onClick={onExport}
             disabled={!onExport}
           >
@@ -163,28 +162,30 @@ export function NavBar({
             Export
           </Button>
 
-          <div className="hidden md:flex">
-            <GoogleTranslateDropdown className="max-w-[220px]" />
-          </div>
+          {/* Translate — visible on all screens, compact on mobile */}
+          <GoogleTranslateDropdown className="max-w-[100px] sm:max-w-[180px]" />
         </div>
       </div>
 
       {/* Last Updated Strip */}
       {lastUpdated && (
         <div
-          className="border-t px-6 py-1.5"
+          className="border-t px-4 py-1"
           style={{ borderColor: '#e2e8f0', background: 'rgba(14,165,164,0.04)' }}
         >
-          <div className="container mx-auto flex items-center justify-between" style={{ fontSize: '10px', color: '#94a3b8', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          <div
+            className="container mx-auto flex items-center justify-between flex-wrap gap-1"
+            style={{ fontSize: '10px', color: '#94a3b8', letterSpacing: '0.06em', textTransform: 'uppercase' }}
+          >
             <span style={{ fontWeight: 500 }}>
               Last Sync:{' '}
               <span style={{ fontFamily: 'ui-monospace, monospace', color: '#0f172a', fontWeight: 600 }}>
                 {lastUpdated.toLocaleTimeString()}
               </span>
             </span>
-            <span className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1">
               <Radio className="h-3 w-3" style={{ color: '#0ea5a4' }} />
-              {isLive ? 'Auto-refresh enabled' : 'Manual refresh mode'}
+              {isLive ? 'Auto-refresh on' : 'Manual mode'}
             </span>
           </div>
         </div>

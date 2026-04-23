@@ -7,15 +7,17 @@ import { DistrictPanel } from '@/components/DistrictPanel';
 import { SensorDetailModal } from '@/components/SensorDetailModal';
 import { Footer } from '@/components/Footer';
 import { useGroundwaterData } from '@/hooks/useGroundwaterData';
-import { SensorReading, District, Alert } from '@/lib/data';
+import { SensorReading, District, Alert, sensorsDashboardExportRows } from '@/lib/data';
 import { downloadDataAsCsv } from '@/lib/csv';
 import { SensorHistoryModal } from '@/components/SensorHistoryModal';
+import { FocusedDevicePanel } from '@/components/FocusedDevicePanel';
 import { motion } from 'framer-motion';
 import { onValue, ref } from 'firebase/database';
 import { database } from '@/lib/firebaseClient';
 
 const LOCATION_ALL_KEY = 'all-locations';
 const DATE_ALL_KEY = 'all-dates';
+const FOCUS_DEVICE_IDENTIFIERS = ['Device 05', 'Nagpur 05'];
 
 const Index = () => {
   const {
@@ -132,19 +134,22 @@ const Index = () => {
   const handleExportAllSensors = useCallback(() => {
     if (!filteredSensors.length) return;
 
-    downloadDataAsCsv(
-      'jalyantra-sensor-readings.csv',
-      filteredSensors.map((sensor) => ({
-        'Device ID': sensor.deviceId,
-        District: sensor.district,
-        Depth: sensor.depth,
-        Status: sensor.status,
-        'Last Sync': sensor.lastSync,
-        Latitude: sensor.lat,
-        Longitude: sensor.long,
-      }))
-    );
+    downloadDataAsCsv('jalyantra-sensor-readings.csv', sensorsDashboardExportRows(filteredSensors));
   }, [filteredSensors]);
+
+  const focusSensor = useMemo(() => {
+    if (!sensors.length) return null;
+    return (
+      sensors.find((sensor) =>
+        FOCUS_DEVICE_IDENTIFIERS.some(
+          (id) =>
+            sensor.deviceId === id ||
+            sensor.deviceId.toLowerCase().includes(id.toLowerCase()) ||
+            sensor.district.toLowerCase().includes('nagpur'),
+        ),
+      ) ?? sensors[0]
+    );
+  }, [sensors]);
 
   return (
     <>
@@ -210,19 +215,25 @@ const Index = () => {
                 Layer: Sensor Network
               </div>
             </div>
-          <div className="overflow-hidden">
-            <GroundwaterMap
-              sensors={filteredSensors}
-              districts={filteredDistricts}
-              onSensorClick={handleSensorClick}
-              onDistrictClick={handleDistrictClick}
-            />
-          </div>
+        <div className="overflow-hidden">
+          <GroundwaterMap
+            sensors={filteredSensors}
+            districts={filteredDistricts}
+            onSensorClick={handleSensorClick}
+            onDistrictClick={handleDistrictClick}
+          />
         </div>
+      </div>
 
-        {/* Sensor Data Mirror */}
+      {focusSensor && (
         <div className="jal-card-elevated overflow-hidden">
-          <div className="p-4 border-b border-border flex items-center justify-between">
+          <FocusedDevicePanel sensor={focusSensor} />
+        </div>
+      )}
+
+      {/* Sensor Data Mirror */}
+      <div className="jal-card-elevated overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Realtime sensorData</h2>
               <p className="text-xs text-muted-foreground mt-0.5">Reading /sensorData and writing /sensorData/test</p>

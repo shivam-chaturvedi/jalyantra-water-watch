@@ -1,10 +1,16 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Clock, Save } from 'lucide-react';
-import { SensorReading } from '@/lib/data';
+import { SensorReading, sensorHistoryPointsToCsvRows, sensorsDashboardExportRows } from '@/lib/data';
+import {
+  buildPumpRunSegments,
+  chartPointLabel,
+  pumpRunSegmentsToChartRows,
+  segmentIntoPumpEvents,
+} from '@/lib/pumpEvents';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { PumpDrawdownChart } from '@/components/PumpDrawdownChart';
 import { downloadDataAsCsv } from '@/lib/csv';
 
 interface SensorHistoryModalProps {
@@ -16,34 +22,50 @@ interface SensorHistoryModalProps {
 export function SensorHistoryModal({ sensor, isOpen, onClose }: SensorHistoryModalProps) {
   const [activeTab, setActiveTab] = useState<'chart' | 'table'>('chart');
 
+  const tableMeta = useMemo(() => {
+    const h = sensor?.history ?? [];
+    return {
+      showTrigger: h.some((p) => p.triggerSource),
+      showUptime: h.some((p) => p.uptimeSeconds != null),
+      showOnline: h.some((p) => p.deviceOnlineSince),
+    };
+  }, [sensor?.history]);
+
   if (!sensor) return null;
 
-  const chartData = sensor.history.length
-    ? sensor.history.map((point) => ({
-        time: point.collectedDate,
-        depth: point.depth,
-      }))
-    : [{ time: sensor.collectedDate, depth: sensor.depth }];
+  const sortedHistory = [...sensor.history].sort((a, b) => a.timestamp - b.timestamp);
+  const pumpEvents = segmentIntoPumpEvents(sortedHistory);
+  const pumpSegments = buildPumpRunSegments(pumpEvents);
+  const lastSyncMs = new Date(sensor.lastSync).getTime();
+  const chartData =
+    pumpSegments.length > 0
+      ? pumpRunSegmentsToChartRows(pumpSegments)
+      : [
+          {
+            timeMs: Number.isFinite(lastSyncMs) ? lastSyncMs : Date.now(),
+            depth: sensor.depth,
+            label: chartPointLabel({
+              id: 'current',
+              depth: sensor.depth,
+              collectedDate: sensor.collectedDate,
+              collectedDateTime: sensor.lastCollectedDateTime,
+              timestamp: Number.isFinite(lastSyncMs) ? lastSyncMs : Date.now(),
+            }),
+            runIndex: 1,
+            isRunStart: true,
+            isRunEnd: true,
+          },
+        ];
 
   const handleExportHistory = () => {
     if (!sensor) return;
 
-    const historyRows =
+    const rows =
       sensor.history.length > 0
-        ? sensor.history.slice().reverse().map((point) => ({
-            Timestamp: new Date(point.timestamp).toISOString(),
-            Date: point.collectedDate,
-            Depth: point.depth,
-          }))
-        : [
-            {
-              Timestamp: sensor.lastSync,
-              Date: sensor.collectedDate,
-              Depth: sensor.depth,
-            },
-          ];
+        ? sensorHistoryPointsToCsvRows(sensor.history.slice().reverse())
+        : sensorsDashboardExportRows([sensor]);
 
-    downloadDataAsCsv(`${sensor.deviceId}-full-history.csv`, historyRows);
+    downloadDataAsCsv(`${sensor.deviceId}-full-history.csv`, rows);
   };
 
   return (
@@ -57,14 +79,16 @@ export function SensorHistoryModal({ sensor, isOpen, onClose }: SensorHistoryMod
             onClick={onClose}
             className="fixed inset-0 bg-foreground/30 backdrop-blur-sm z-50"
           />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-            className="fixed inset-0 m-auto h-full max-h-[80vh] max-w-3xl bg-card rounded-2xl border border-border shadow-2xl z-50 overflow-hidden"
-          >
-            <div className="gradient-header p-5 flex items-center justify-between text-white">
+          {/* Flex wrapper centers modal; avoid Tailwind translate + motion transform fighting layout. */}
+          <div className="fixed inset-0 z-[51] pointer-events-none flex items-center justify-center px-3 py-4 sm:px-5 sm:py-6">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ type: 'spring', damping: 24, stiffness: 320 }}
+              className="pointer-events-auto flex max-h-[min(92dvh,calc(100dvh-2rem))] w-full max-w-3xl min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl sm:rounded-2xl"
+            >
+              <div className="gradient-header flex shrink-0 items-center justify-between p-4 text-white sm:p-5">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
                   <Clock className="w-5 h-5" />
@@ -77,9 +101,9 @@ export function SensorHistoryModal({ sensor, isOpen, onClose }: SensorHistoryMod
               <Button variant="ghost" size="icon" onClick={onClose} className="text-white hover:bg-white/20">
                 <X className="w-5 h-5" />
               </Button>
-            </div>
+              </div>
 
-            <div className="p-5 space-y-5 h-full overflow-hidden">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 sm:space-y-4 sm:p-4">
               <div className="flex items-center gap-3 border-b border-border/50 pb-3">
                 {['chart', 'table'].map((tab) => (
                   <button
@@ -110,65 +134,62 @@ export function SensorHistoryModal({ sensor, isOpen, onClose }: SensorHistoryMod
               </div>
 
               {activeTab === 'chart' && (
-                <div className="jal-card max-h-[45vh] overflow-y-auto">
-                  <div className="h-56">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis
-                          dataKey="time"
-                          tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                          tickLine={false}
-                          axisLine={false}
-                        />
-                        <YAxis
-                          tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                          tickLine={false}
-                          axisLine={false}
-                          unit="m"
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: 'hsl(var(--card))',
-                            borderColor: 'hsl(var(--border))',
-                            borderRadius: '8px',
-                          }}
-                          formatter={(value: number) => [`${value}m`, 'Depth']}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="depth"
-                          stroke="hsl(187, 72%, 40%)"
-                          strokeWidth={2}
-                          dot={false}
-                          activeDot={{ r: 4, fill: 'hsl(187, 72%, 40%)' }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
+                <div className="jal-card max-h-[min(42vh,320px)] space-y-2 overflow-y-auto sm:max-h-[45vh]">
+                  <p className="px-0.5 text-[11px] leading-snug text-muted-foreground">
+                    Red dots = pump start reading. Blue dots = pump stop reading.
+                  </p>
+                  <PumpDrawdownChart rows={chartData} segments={pumpSegments} className="h-48 sm:h-56" />
                 </div>
               )}
 
               {activeTab === 'table' && (
-                <div className="jal-card max-h-[50vh] overflow-y-auto">
-                  <div className="space-y-2 text-xs font-mono">
-                    {sensor.history.slice().reverse().map((point) => (
-                      <div
-                        key={point.id}
-                        className="flex items-center justify-between border-b border-border/50 pb-2"
-                      >
-                        <span>{point.collectedDate}</span>
-                        <span>{point.depth}m</span>
-                      </div>
-                    ))}
-                    {!sensor.history.length && (
-                      <p className="text-muted-foreground">No history yet.</p>
-                    )}
-                  </div>
+                <div className="jal-card max-h-[min(50vh,360px)] overflow-y-auto sm:max-h-[50vh]">
+                  {sensor.history.length > 0 ? (
+                    <table className="w-full border-collapse text-left text-[11px] sm:text-xs">
+                      <thead>
+                        <tr className="border-b border-border text-muted-foreground">
+                          <th className="py-2 pr-2 font-medium">When</th>
+                          <th className="py-2 pr-2 font-medium tabular-nums">Depth</th>
+                          {tableMeta.showTrigger && <th className="py-2 pr-2 font-medium">Trigger</th>}
+                          {tableMeta.showUptime && <th className="py-2 pr-2 font-medium tabular-nums">Uptime s</th>}
+                          {tableMeta.showOnline && <th className="py-2 font-medium">Online since</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sensor.history
+                          .slice()
+                          .reverse()
+                          .map((point) => (
+                            <tr key={point.id} className="border-b border-border/50">
+                              <td className="py-2 pr-2 align-top leading-snug">{chartPointLabel(point)}</td>
+                              <td className="py-2 pr-2 tabular-nums align-top">{point.depth}m</td>
+                              {tableMeta.showTrigger && (
+                                <td className="py-2 pr-2 align-top text-muted-foreground">
+                                  {point.triggerSource ?? '—'}
+                                </td>
+                              )}
+                              {tableMeta.showUptime && (
+                                <td className="py-2 pr-2 tabular-nums align-top">
+                                  {point.uptimeSeconds ?? '—'}
+                                </td>
+                              )}
+                              {tableMeta.showOnline && (
+                                <td className="py-2 align-top text-muted-foreground break-all">
+                                  {point.deviceOnlineSince ?? '—'}
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No history yet.</p>
+                  )}
                 </div>
               )}
-            </div>
-          </motion.div>
+              </div>
+            </motion.div>
+          </div>
         </>
       )}
     </AnimatePresence>

@@ -171,9 +171,9 @@ export function DistrictPanel({ district, isOpen, onClose, onViewAllSensors }: D
                     {trendData.length} data points
                   </span>
                 </div>
-                <div className="h-48">
+                <div className="h-48 w-full overflow-hidden">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={trendData}>
+                    <AreaChart data={trendData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
                       <defs>
                         <linearGradient id="depthGradient" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="hsl(187, 72%, 40%)" stopOpacity={0.3} />
@@ -183,9 +183,16 @@ export function DistrictPanel({ district, isOpen, onClose, onViewAllSensors }: D
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis
                         dataKey="date"
-                        tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                        tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }}
                         tickLine={false}
                         axisLine={false}
+                        minTickGap={40}
+                        tickFormatter={(val: string) => {
+                          if (!val) return '';
+                          const d = new Date(val);
+                          if (isNaN(d.getTime())) return val.slice(0, 5);
+                          return `${d.getMonth() + 1}/${d.getDate()}`;
+                        }}
                       />
                       <YAxis
                         tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
@@ -193,6 +200,7 @@ export function DistrictPanel({ district, isOpen, onClose, onViewAllSensors }: D
                         axisLine={false}
                         domain={['auto', 'auto']}
                         unit="m"
+                        width={36}
                       />
                       <Tooltip
                         contentStyle={{

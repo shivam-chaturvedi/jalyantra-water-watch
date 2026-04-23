@@ -1,9 +1,25 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, MapPin, Activity, Clock, Download, Signal, Thermometer, BarChart3 } from 'lucide-react';
-import { SensorReading, getDepthRiskLevel, getRiskColorClass, getRiskTextColorClass } from '@/lib/data';
+import {
+  SensorReading,
+  formatLastSyncDate,
+  getDepthRiskLevel,
+  getRiskColorClass,
+  getRiskTextColorClass,
+  sensorHistoryPointsToCsvRows,
+  sensorsDashboardExportRows,
+} from '@/lib/data';
+import {
+  buildPumpRunSegments,
+  getPointsLast24h,
+  pumpRunSegmentsToChartRows,
+  segmentIntoPumpEvents,
+  summarize24h,
+} from '@/lib/pumpEvents';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { PumpDrawdownChart } from '@/components/PumpDrawdownChart';
+import { PumpRunSummaryTable } from '@/components/PumpRunSummaryTable';
 import { downloadDataAsCsv } from '@/lib/csv';
 
 interface SensorDetailModalProps {
@@ -17,32 +33,25 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
   if (!sensor) return null;
 
   const risk = getDepthRiskLevel(sensor.depth);
-  const chartData = sensor.history.length
-    ? sensor.history.map((point) => ({
-        time: point.collectedDate,
-        depth: point.depth,
-      }))
-    : [{ time: sensor.collectedDate, depth: sensor.depth }];
-  const lastSyncTime = new Date(sensor.lastSync);
-  const hoursAgo = Math.round((Date.now() - lastSyncTime.getTime()) / (1000 * 60 * 60));
+  const points24h = getPointsLast24h(sensor);
+  const pumpEvents24h = segmentIntoPumpEvents(points24h);
+  const pumpSegments24h = buildPumpRunSegments(pumpEvents24h);
+  const chartRows24h = pumpRunSegmentsToChartRows(pumpSegments24h);
+  const summary24h = summarize24h(points24h);
+  const hasReadingsIn24h = points24h.length > 0;
+  const currentLevelDisplay =
+    summary24h.currentWaterLevel !== null ? summary24h.currentWaterLevel : sensor.depth;
+  const has24hChartData = chartRows24h.some((r) => r.depth !== null);
+  const lastSyncLabel = formatLastSyncDate(sensor);
+  const validationNotes = sensor.validationFlags ?? [];
 
   const handleDownloadHistory = () => {
-    const historyRows =
+    const rows =
       sensor.history.length > 0
-        ? sensor.history.map((point) => ({
-            Timestamp: new Date(point.timestamp).toISOString(),
-            Date: point.collectedDate,
-            Depth: point.depth,
-          }))
-        : [
-            {
-              Timestamp: sensor.lastSync,
-              Date: sensor.collectedDate,
-              Depth: sensor.depth,
-            },
-          ];
+        ? sensorHistoryPointsToCsvRows([...sensor.history].reverse())
+        : sensorsDashboardExportRows([sensor]);
 
-    downloadDataAsCsv(`${sensor.deviceId}-history.csv`, historyRows);
+    downloadDataAsCsv(`${sensor.deviceId}-history.csv`, rows);
   };
 
   return (
@@ -63,7 +72,7 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="w-full max-w-3xl bg-card rounded-2xl border border-border shadow-2xl overflow-hidden max-h-[85vh] pointer-events-auto"
+              className="w-full max-w-3xl bg-card rounded-2xl border border-border shadow-2xl overflow-hidden max-h-[92vh] sm:max-h-[85vh] pointer-events-auto"
             >
               <div className="gradient-header p-5 text-white">
                 <div className="flex items-center justify-between">
@@ -120,10 +129,8 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
 
                   <div className="jal-card text-center">
                     <Clock className="w-5 h-5 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground mb-1">Last Sync</p>
-                    <p className="font-semibold text-sm text-foreground">
-                      {hoursAgo === 0 ? 'Just now' : `${hoursAgo}h ago`}
-                    </p>
+                    <p className="text-xs text-muted-foreground mb-1">Last sync</p>
+                    <p className="font-semibold text-sm text-foreground">{lastSyncLabel}</p>
                   </div>
 
                   <div className="jal-card text-center">
@@ -158,52 +165,77 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
                 </div>
 
                 <div className="jal-card">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-sm text-foreground flex items-center gap-2">
-                      <BarChart3 className="w-4 h-4 text-accent" />
-                      24-Hour Depth Reading
-                    </h3>
-                    <span className="text-xs text-muted-foreground">High resolution</span>
+                  <div className="mb-4 space-y-2">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                      <h3 className="font-semibold text-sm text-foreground flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4 text-accent" />
+                        24-hour pump drawdown
+                      </h3>
+                  <span className="text-[11px] text-muted-foreground leading-snug max-w-md text-left">
+                    Red dots show the reading when the pump starts; blue dots show the reading when the pump stops.
+                    Lines in matching colors connect the respective sequences for easier comparison.
+                  </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-center">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Current depth</p>
+                        <p className="text-sm font-bold text-foreground tabular-nums">
+                          {currentLevelDisplay}m
+                          {!hasReadingsIn24h && (
+                            <span className="block text-[10px] font-normal text-muted-foreground normal-case">
+                              No samples in 24h
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-center">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Pump runs</p>
+                        <p className="text-sm font-bold text-foreground tabular-nums">{summary24h.pumpRuns}</p>
+                      </div>
+                      <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-center">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Max drawdown</p>
+                        <p className="text-sm font-bold text-foreground tabular-nums">
+                          {summary24h.pumpRuns ? `${summary24h.maxDrawdown.toFixed(2)}m` : '—'}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-center">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Avg drawdown rate</p>
+                        <p className="text-sm font-bold text-foreground tabular-nums">
+                          {summary24h.runsWithDuration > 0
+                            ? `${summary24h.avgDrawdownRate.toFixed(3)} m/min`
+                            : '—'}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="h-48">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis
-                          dataKey="time"
-                          tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }}
-                          tickLine={false}
-                          axisLine={false}
-                          interval={3}
-                        />
-                        <YAxis
-                          tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                          tickLine={false}
-                          axisLine={false}
-                          domain={['auto', 'auto']}
-                          unit="m"
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: 'hsl(var(--card))',
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px',
-                            fontSize: '12px',
-                          }}
-                          formatter={(value: number) => [`${value}m`, 'Depth']}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="depth"
-                          stroke="hsl(187, 72%, 40%)"
-                          strokeWidth={2}
-                          dot={false}
-                          activeDot={{ r: 4, fill: 'hsl(187, 72%, 40%)' }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
+                <div className="w-full">
+                    {has24hChartData ? (
+                      <PumpDrawdownChart rows={chartRows24h} segments={pumpSegments24h} />
+                    ) : (
+                    <div className="flex h-full min-h-[14rem] items-center justify-center rounded-lg border border-dashed border-border bg-muted/10 px-4 text-center text-sm text-muted-foreground">
+                      No depth readings in the last 24 hours. Data appears only while the pump is powered on.
+                    </div>
+                  )}
                 </div>
+                <div className="mt-4">
+                  <PumpRunSummaryTable segments={pumpSegments24h} />
+                </div>
+                {validationNotes.length > 0 && (
+                  <div className="mt-3 rounded-lg border border-lime-500/40 bg-lime-50/80 p-3 text-[11px] text-lime-800">
+                    <p className="font-semibold text-xs text-lime-700">Data validation flags</p>
+                    <ul className="mt-1 space-y-1">
+                      {validationNotes.map((note, index) => (
+                        <li key={note + index} className="text-[11px]">
+                          • {note}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-1 text-[10px] text-lime-600">
+                      These flags trim implausible values and highlight sudden jumps to avoid misleading reporting.
+                    </p>
+                  </div>
+                )}
+              </div>
 
                 <div className="jal-card">
                   <h3 className="font-semibold text-sm text-foreground mb-3">Sensor Metadata</h3>

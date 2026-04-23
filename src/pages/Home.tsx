@@ -42,12 +42,14 @@ const dashboardStats = [
   { label: "Fastest Decline", value: "Mumbai", note: "-1.4m in 30 days" },
 ];
 
-const alertItems = [
-  "Mumbai: Rapid drop of 4.5m in recent readings",
-  "Nashik: Rapid drop of 4m in recent readings",
-  "Mumbai: Average depth at 45.9m — Critical zone",
-  "Pune: Average depth at 54m — Critical zone",
-  "Nashik: Average depth at 76m — Critical zone",
+const alertItems: Array<{ tone: "danger" | "success"; text: string }> = [
+  { tone: "danger", text: "Nagpur: Rapid drop of 1.3 m in recent readings" },
+  {
+    tone: "success",
+    text: "Pune: Sensors are being monitored continuously — no critical alerts.",
+  },
+  { tone: "danger", text: "Nashik: Average depth at 25m – critical zone" },
+  { tone: "success", text: "Mumbai: Average depth at 3.5 – safe zone" },
 ];
 
 const deploymentCards = [
@@ -119,6 +121,17 @@ export default function Home() {
 
   const handleContactSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (
+      !contactInfo.name.trim() ||
+      !contactInfo.email.trim() ||
+      !contactInfo.interest.trim()
+    ) {
+      setStatus("error");
+      setStatusMessage("Please fill Name, Email, and Interested in.");
+      return;
+    }
+
     setStatus("sending");
     setStatusMessage("Sending your request…");
 
@@ -188,41 +201,49 @@ Details: ${contactInfo.details}`,
       <div className="h-[32px] w-full bg-background" aria-hidden="true" />
       <div className="bg-background text-foreground">
         <header className="border-b border-border bg-card/90 backdrop-blur-sm shadow-sm sticky top-0 z-50">
-          <div className="container mx-auto flex items-center gap-4 px-4 py-3">
+          <div className="container mx-auto flex items-center gap-3 px-4 py-2">
             <a
               href="/"
               onClick={navigateToHome}
-              className="flex items-center gap-3 flex-shrink-0"
+              className="flex items-center gap-2 flex-shrink-0"
             >
               <img
                 src="/logo.jpeg"
                 alt="JalYantra logo"
-                className="h-20 w-20 rounded-2xl object-cover ring-2 ring-teal-200 shadow-md"
+                className="h-10 w-10 sm:h-14 sm:w-14 md:h-16 md:w-16 rounded-xl object-cover ring-2 ring-teal-200 shadow-md"
               />
               <div>
-                <p className="text-xl font-bold uppercase tracking-wide" style={{ color: '#0f766e', fontFamily: 'Poppins, Inter, sans-serif' }}>
+                <p className="text-base sm:text-lg font-bold uppercase tracking-wide" style={{ color: '#0f766e', fontFamily: 'Poppins, Inter, sans-serif' }}>
                   JalYantra
                 </p>
-                <p className="text-sm text-muted-foreground uppercase tracking-widest font-medium">
+                <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-widest font-medium hidden sm:block">
                   Groundwater Intelligence
                 </p>
               </div>
             </a>
-            <nav className="hidden md:flex flex-1 justify-center gap-6 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <nav className="hidden md:flex flex-1 justify-center gap-5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {navLinks.map((link) => (
                 <a key={link.id} href={`#${link.id}`} className="hover:text-teal-600 transition-colors">
                   {link.label}
                 </a>
               ))}
             </nav>
-            <div className="ml-auto flex items-center gap-3">
-              <GoogleTranslateDropdown className="max-w-[220px]" />
-              <Button asChild size="sm" className="rounded-full px-6 py-2 text-sm font-bold bg-teal-600 hover:bg-teal-700 shadow-md">
-                <a href="/dashboard" onClick={navigateToDashboard}>
-                  Go to Dashboard
-                </a>
-              </Button>
-            </div>
+          <div className="ml-auto flex items-center gap-2">
+            <GoogleTranslateDropdown className="max-w-[120px] sm:max-w-[180px]" />
+            <Button
+              asChild
+              size="sm"
+              className="rounded-full px-3 sm:px-5 py-2 text-xs sm:text-sm font-bold bg-teal-600 text-white hover:bg-teal-700 hover:text-white shadow-md whitespace-nowrap"
+            >
+              <a
+                href="/dashboard"
+                onClick={navigateToDashboard}
+                className="text-white hover:text-white"
+              >
+                <p className="text-white"> Dashboard</p>
+              </a>
+            </Button>
+          </div>
           </div>
         </header>
 
@@ -355,20 +376,29 @@ Details: ${contactInfo.details}`,
                 </div>
               ))}
             </div>
-            <div className="grid gap-5 lg:grid-cols-[0.6fr_1.4fr]">
-              <div className="rounded-[32px] border-2 border-teal-100 bg-card/70 p-7">
-                <div className="flex items-center justify-between">
-                  <span className="text-lg font-bold text-foreground">Active Alerts</span>
-                  <span className="text-sm font-semibold bg-red-100 text-red-700 px-3 py-1 rounded-full">5 Active</span>
-                </div>
-                <div className="mt-5 space-y-3 text-muted-foreground">
-                  {alertItems.map((alert) => (
-                    <p key={alert} className="rounded-2xl border border-[#f4c2c2] bg-[#fff5f5] px-5 py-4 text-sm font-medium text-[#a02e2e]">
-                      ⚠️ {alert}
-                    </p>
-                  ))}
-                </div>
-              </div>
+	            <div className="grid gap-5 lg:grid-cols-[0.6fr_1.4fr]">
+	              <div className="rounded-[32px] border-2 border-teal-100 bg-card/70 p-7">
+	                <div className="flex items-center justify-between">
+	                  <span className="text-lg font-bold text-foreground">Active Alerts</span>
+	                  <span className="text-sm font-semibold bg-red-100 text-red-700 px-3 py-1 rounded-full">
+	                    {alertItems.length} Active
+	                  </span>
+	                </div>
+	                <div className="mt-5 space-y-3 text-muted-foreground">
+	                  {alertItems.map((alert) => (
+	                    <p
+	                      key={alert.text}
+	                      className={
+	                        alert.tone === "danger"
+	                          ? "rounded-2xl border border-[#f4c2c2] bg-[#fff5f5] px-5 py-4 text-sm font-medium text-[#a02e2e]"
+	                          : "rounded-2xl border border-[#bfe9c6] bg-[#f2fff5] px-5 py-4 text-sm font-medium text-[#1b6b2a]"
+	                      }
+	                    >
+	                      {alert.tone === "danger" ? "⚠️" : "✅"} {alert.text}
+	                    </p>
+	                  ))}
+	                </div>
+	              </div>
               <div className="rounded-[32px] border-2 border-teal-100 bg-card/70 p-7">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
@@ -392,9 +422,9 @@ Details: ${contactInfo.details}`,
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-5 pt-4">
-              <img src="/1.png" alt="Alert 1" className="w-full h-[600px] rounded-[24px] object-cover border-2 border-teal-100 shadow-md hover:shadow-lg transition-all" />
-              <img src="/graph.png" alt="Graph" className="w-full h-[600px] rounded-[24px] object-cover border-2 border-teal-100 shadow-md hover:shadow-lg transition-all" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
+              <img src="/1.png" alt="Alert 1" className="w-full h-[300px] md:h-[600px] rounded-[24px] object-cover border-2 border-teal-100 shadow-md hover:shadow-lg transition-all" />
+              <img src="/graph.png" alt="Graph" className="w-full h-[300px] md:h-[600px] rounded-[24px] object-cover border-2 border-teal-100 shadow-md hover:shadow-lg transition-all" />
             </div>
           </section>
 
@@ -499,6 +529,7 @@ Details: ${contactInfo.details}`,
                   name="name"
                   value={contactInfo.name}
                   onChange={handleContactChange}
+                  required
                   className="w-full rounded-[18px] border-2 border-teal-100 bg-card/60 px-5 py-4 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-teal-400"
                 />
                 <input
@@ -515,18 +546,22 @@ Details: ${contactInfo.details}`,
                   name="email"
                   value={contactInfo.email}
                   onChange={handleContactChange}
+                  required
                   className="w-full rounded-[18px] border-2 border-teal-100 bg-card/60 px-5 py-4 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-teal-400"
                 />
                 <select
                   name="interest"
                   value={contactInfo.interest}
                   onChange={handleContactChange}
+                  required
                   className="w-full rounded-[18px] border-2 border-teal-100 bg-card/60 px-5 py-4 text-base text-foreground focus:outline-none focus:border-teal-400"
                 >
-                  <option>Interested in…</option>
-                  <option>Dashboards & alerts</option>
-                  <option>Field deployment</option>
-                  <option>Validation support</option>
+                  <option value="" disabled>
+                    Interested in…
+                  </option>
+                  <option value="Dashboards & alerts">Dashboards & alerts</option>
+                  <option value="Field deployment">Field deployment</option>
+                  <option value="Validation support">Validation support</option>
                 </select>
                 <textarea
                   placeholder="Tell us your district(s), number of borewells, and what outcomes you want to measure."
