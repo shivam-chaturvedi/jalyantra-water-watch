@@ -8,3 +8,4 @@ const database = getDatabase(app);
 const auth = getAuth(app);
 
 export { firebaseConfig, database, auth };
+

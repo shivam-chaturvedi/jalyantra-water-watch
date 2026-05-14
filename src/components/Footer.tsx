@@ -50,6 +50,7 @@ export function Footer() {
 
           {/* Data Source Info */}
           <div className="flex flex-wrap items-center justify-center gap-5">
+            {/* Badge 1 */}
             <div className="flex items-center gap-2">
               <div
                 className="w-6 h-6 rounded-full flex items-center justify-center"

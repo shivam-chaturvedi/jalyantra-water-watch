@@ -1,102 +1,167 @@
-import { ChangeEvent, FormEvent, MouseEvent, useCallback, useState } from "react";
+import { ChangeEvent, FormEvent, MouseEvent, useCallback, useMemo, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Footer } from "@/components/Footer";
 import GoogleTranslateDropdown from "@/components/GoogleTranslate";
+import { useAppPages, useSiteFlags } from "@/hooks/useSiteConfig";
+import NotFound from "./NotFound";
+import { useQuery } from "@tanstack/react-query";
+import { fetchDeployment, fetchSiteContent } from "@/lib/siteAdmin";
+import { mergeHomeContentWithDefaults } from "@/lib/contentDefaults";
+import { 
+  resolveImageSrc, 
+  toDrivePreviewUrl, 
+  extractDriveFileId 
+} from "@/lib/driveLinks";
+import { ZoomableImage } from "@/components/ImageModalContext";
+import { FileText, PlayCircle, Video, Award } from "lucide-react";
 
-const navLinks = [
+const baseNavLinks = [
   { label: "Features", id: "features" },
   { label: "How it works", id: "how-it-works" },
   { label: "Dashboard", id: "dashboard" },
   { label: "Deployments", id: "deployments" },
   { label: "Validation", id: "validation" },
   { label: "Contact", id: "contact" },
-];
-
-const insightCards = [
-  {
-    title: "Real-time depth",
-    description: "Track groundwater depth trends over time, not just a single reading.",
-    icon: "/icons/insight-depth.svg",
-  },
-  {
-    title: "Actionable alerts",
-    description: "Detect rapid drops and critical zones early to prevent dry pump runs.",
-    icon: "/icons/insight-alerts.svg",
-  },
-  {
-    title: "Interactive map",
-    description: "See monitored locations, drill into sensor level detail, share visuals.",
-    icon: "/icons/insight-map.svg",
-  },
-  {
-    title: "Export & reports",
-    description: "Share data with NGOs, panchayats, and program partners as evidence.",
-    icon: "/icons/insight-reports.svg",
-  },
-];
-
-const dashboardStats = [
-  { label: "Total Sensors", value: "5", note: "Monitored locations" },
-  { label: "Average Depth", value: "6.1m", note: "State-wide average" },
-  { label: "Critical Districts", value: "0%", note: "Above 20m depth threshold" },
-  { label: "Fastest Decline", value: "Mumbai", note: "-1.4m in 30 days" },
-];
-
-const alertItems: Array<{ tone: "danger" | "success"; text: string }> = [
-  { tone: "danger", text: "Nagpur: Rapid drop of 1.3 m in recent readings" },
-  {
-    tone: "success",
-    text: "Pune: Sensors are being monitored continuously — no critical alerts.",
-  },
-  { tone: "danger", text: "Nashik: Average depth at 25m – critical zone" },
-  { tone: "success", text: "Mumbai: Average depth at 3.5 – safe zone" },
-];
-
-const deploymentCards = [
-  { title: "Deployment photo 1", subtitle: "Installation / training / community meeting" },
-  { title: "Deployment photo 2", subtitle: "Device close-up / pilot geography" },
-  { title: "Deployment photo 3", subtitle: "Farmer outreach & calibration" },
-  { title: "Deployment photo 4", subtitle: "Community-led maintenance" },
-];
-
-const validationCards = [
-  { title: "Certificate of validation", detail: "Upload PDF/image thumbnail with links" },
-  { title: "Letters of recommendation", detail: "Add LOR snippets with names/designations" },
-  { title: "Awards / media / partners", detail: "Showcase logos + one-line context" },
-];
-
-const testimonials = [
-  {
-    name: "Farmer (Village)",
-    role: "Borewell owner · Maharashtra",
-    quote: "The alerts helped us avoid running the motor when the water level dropped suddenly.",
-  },
-  {
-    name: "NGO field coordinator",
-    role: "Partner NGO · Maharashtra",
-    quote: "The dashboard made it easier to explain groundwater changes during community meetings.",
-  },
-  {
-    name: "Advisor / Validator",
-    role: "Hydrology / Program",
-    quote: "Village-level time-series data like this can improve planning and accountability.",
-  },
-];
+] as const;
 
 const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
   event.preventDefault();
 };
 
-const isFlagEnabled = (value?: string) => {
-  if (value === undefined) return true;
-  return value === "true" || value === "1";
-};
+function isHashLink(value: unknown): value is string {
+  return typeof value === "string" && value.trim().startsWith("#");
+}
 
-const showDeploymentsSection = isFlagEnabled(import.meta.env.VITE_SHOW_DEPLOYMENTS);
-const showValidationSection = isFlagEnabled(import.meta.env.VITE_SHOW_VALIDATION);
-const showCarouselSection = isFlagEnabled(import.meta.env.VITE_SHOW_IMAGE_CAROUSEL);
+function HeroCarousel({ items }: { items: string[] }) {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (items.length <= 1) return;
+    const interval = setInterval(() => {
+      setIndex((current) => (current + 1) % items.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [items]);
+
+  const current = items[index];
+  const driveId = extractDriveFileId(current);
+  const isVideo = /\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(current) || (driveId && current.includes('preview'));
+
+  return (
+    <div className="h-full w-full relative">
+      {isVideo ? (
+        <div className="h-full w-full bg-black">
+          {toDrivePreviewUrl(current) ? (
+            <iframe
+              title="Hero video"
+              src={toDrivePreviewUrl(current) ?? undefined}
+              className="h-full w-full"
+              allow="autoplay; encrypted-media"
+            />
+          ) : (
+            <video 
+              src={current} 
+              autoPlay 
+              muted 
+              loop 
+              playsInline 
+              className="h-full w-full object-cover" 
+            />
+          )}
+        </div>
+      ) : (
+        <ZoomableImage
+          src={resolveImageSrc(current)}
+          alt="Carousel item"
+          className="h-full w-full object-cover animate-in fade-in zoom-in duration-1000"
+        />
+      )}
+      
+      {items.length > 1 && (
+        <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 z-10">
+          {items.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setIndex(i)}
+              className={cn(
+                "h-1.5 rounded-full transition-all duration-300",
+                i === index ? "w-6 bg-teal-500" : "w-1.5 bg-white/50 hover:bg-white/80"
+              )}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Home() {
+  const flagsQuery = useSiteFlags();
+  const pagesQuery = useAppPages();
+  const homeContentQuery = useQuery({
+    queryKey: ["site_content", "home"],
+    queryFn: () => fetchSiteContent("home"),
+  });
+  const deploymentsPreviewQuery = useQuery({
+    queryKey: ["deployments", "alibaug-raigad", "preview"],
+    queryFn: () => fetchDeployment("alibaug-raigad"),
+  });
+
+  const isHomeEnabled =
+    pagesQuery.data?.find((p) => p.path === "/")?.is_enabled ?? true;
+  const isDashboardEnabled =
+    pagesQuery.data?.find((p) => p.path === "/dashboard")?.is_enabled ?? true;
+  const showDeploymentsSection = flagsQuery.data?.show_deployments ?? true;
+  const showValidationSection = flagsQuery.data?.show_validation ?? false;
+  const showCarouselSection = flagsQuery.data?.show_image_carousel ?? true;
+
+  if (pagesQuery.isSuccess && !isHomeEnabled) {
+    return <NotFound />;
+  }
+
+  const homeContent = useMemo(
+    () => mergeHomeContentWithDefaults(homeContentQuery.data ?? {}),
+    [homeContentQuery.data],
+  );
+  const hero = homeContent.hero;
+  const insights = homeContent.insights;
+  const dashboardContent = homeContent.dashboard;
+  const deploymentsContent = homeContent.deployments;
+  const validationContent = homeContent.validation;
+  const contactContent = homeContent.contact;
+
+  const primaryCtaHref = String((hero as any).primaryCtaHref ?? "/dashboard").trim() || "/dashboard";
+  const secondaryCtaHref = String((hero as any).secondaryCtaHref ?? "#how-it-works").trim() || "#how-it-works";
+
+  const dashboardScreenshots = useMemo(() => {
+    const csv = String(dashboardContent.screenshotsCsv ?? "").trim();
+    return csv
+      ? csv
+          .split(",")
+          .map((u: string) => u.trim())
+          .filter(Boolean)
+      : [];
+  }, [dashboardContent.screenshotsCsv]);
+
+  const deploymentsPreview = (deploymentsPreviewQuery.data?.data ?? {}) as any;
+  const deploymentsPreviewVideoUrl = String(deploymentsPreview.previewVideoUrl ?? "").trim();
+  const deploymentsPreviewImages = useMemo(() => {
+    const arr = Array.isArray(deploymentsPreview.previewImages) ? deploymentsPreview.previewImages : [];
+    const urls = arr.filter((x: unknown) => typeof x === "string") as string[];
+    return urls.length ? urls.slice(0, 4) : [];
+  }, [deploymentsPreview.previewImages]);
+
+  const isDeploymentsPageEnabled =
+    pagesQuery.data?.find((p) => p.path === "/deployments")?.is_enabled ?? true;
+
+  const navLinks = baseNavLinks.filter((link) => {
+    if (link.id === "deployments") return showDeploymentsSection;
+    if (link.id === "validation") return showValidationSection;
+    if (link.id === "dashboard") return isDashboardEnabled;
+    return true;
+  });
+
   const [contactInfo, setContactInfo] = useState({
     name: "",
     organization: "",
@@ -128,7 +193,7 @@ export default function Home() {
       !contactInfo.interest.trim()
     ) {
       setStatus("error");
-      setStatusMessage("Please fill Name, Email, and Interested in.");
+      setStatusMessage(contactContent.form.requiredErrorMessage);
       return;
     }
 
@@ -163,7 +228,7 @@ Details: ${contactInfo.details}`,
       }
 
       setStatus("sent");
-      setStatusMessage("Thanks! Your inquiry has been delivered.");
+      setStatusMessage(contactContent.form.sentMessage);
       setContactInfo({
         name: "",
         organization: "",
@@ -175,7 +240,7 @@ Details: ${contactInfo.details}`,
       console.error("Contact form error", error);
       setStatus("error");
       setStatusMessage(
-        "Something went wrong. Please try again or email support@jalyantra.tech directly."
+        contactContent.form.genericErrorMessage
       );
     }
   };
@@ -230,19 +295,21 @@ Details: ${contactInfo.details}`,
             </nav>
           <div className="ml-auto flex items-center gap-2">
             <GoogleTranslateDropdown className="max-w-[120px] sm:max-w-[180px]" />
-            <Button
-              asChild
-              size="sm"
-              className="rounded-full px-3 sm:px-5 py-2 text-xs sm:text-sm font-bold bg-teal-600 text-white hover:bg-teal-700 hover:text-white shadow-md whitespace-nowrap"
-            >
-              <a
-                href="/dashboard"
-                onClick={navigateToDashboard}
-                className="text-white hover:text-white"
+            {isDashboardEnabled && (
+              <Button
+                asChild
+                size="sm"
+                className="rounded-full px-3 sm:px-5 py-2 text-xs sm:text-sm font-bold bg-teal-600 text-white hover:bg-teal-700 hover:text-white shadow-md whitespace-nowrap"
               >
-                <p className="text-white"> Dashboard</p>
-              </a>
-            </Button>
+                <a
+                  href="/dashboard"
+                  onClick={navigateToDashboard}
+                  className="text-white hover:text-white"
+                >
+                  <p className="text-white"> Dashboard</p>
+                </a>
+              </Button>
+            )}
           </div>
           </div>
         </header>
@@ -250,59 +317,99 @@ Details: ${contactInfo.details}`,
         <main className="space-y-24 pt-8 pb-16">
           <div className="w-full">
             <section className="container mx-auto px-4" id="features">
-              <div className="grid gap-10 rounded-[32px] border border-border bg-card px-8 py-14 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="grid gap-10 rounded-[32px] border border-border bg-card px-4 sm:px-8 py-10 sm:py-14 lg:grid-cols-[1.2fr_0.8fr]">
                 <div className="space-y-7">
-                  <p className="text-base uppercase tracking-[0.4em] font-bold" style={{ color: '#0d9488' }}>Smarter monitoring</p>
+                  <p className="text-base uppercase tracking-[0.4em] font-bold" style={{ color: '#0d9488' }}>
+                    {hero.kicker ?? "Smarter monitoring"}
+                  </p>
                   <h1
-                    className="text-5xl text-foreground md:text-6xl leading-tight"
+                    className="text-3xl sm:text-5xl text-foreground md:text-6xl leading-tight"
                     style={{ fontFamily: "Arial, sans-serif", fontWeight: 400 }}
                   >
-                    Smarter groundwater monitoring for rural India
+                    {hero.title ?? "Smarter groundwater monitoring for rural India"}
                   </h1>
                   <p
-                    className="text-xl text-muted-foreground leading-relaxed"
+                    className="text-lg sm:text-xl text-muted-foreground leading-relaxed"
                     style={{ fontFamily: "Arial, sans-serif", fontWeight: 400 }}
                   >
-                    JalYantra is an IoT groundwater monitoring system designed for deep agricultural borewells
-                    and open wells in drought-prone districts.
+                    {hero.description ??
+                      "JalYantra is an IoT groundwater monitoring system designed for deep agricultural borewells and open wells in drought-prone districts."}
                   </p>
                   <div className="space-y-3 text-base text-muted-foreground">
                     <p>
                       <span className="font-bold" style={{ color: '#0f766e' }}>Problem:</span>{" "}
-                      Lack of continuous, local-level groundwater monitoring across seasons.
+                      {hero.problem ?? "Lack of continuous, local-level groundwater monitoring across seasons."}
                     </p>
                     <p>
                       <span className="font-bold" style={{ color: '#0f766e' }}>Solution:</span>{" "}
-                      LIDAR-based measurement with real-time dashboard insights for crop planning.
+                      {hero.solution ?? "LIDAR-based measurement with real-time dashboard insights for crop planning."}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-4">
                     <Button asChild size="lg" className="rounded-full px-8 py-3 text-base font-bold bg-teal-600 hover:bg-teal-700 shadow-lg">
-                      <a href="/dashboard" onClick={navigateToDashboard}>
-                        Go to Dashboard
+                      <a
+                        href={primaryCtaHref}
+                        onClick={(e: MouseEvent<HTMLAnchorElement>) => {
+                          if (isHashLink(primaryCtaHref)) {
+                            e.preventDefault();
+                            scrollToSection(primaryCtaHref.slice(1));
+                            return;
+                          }
+                          if (primaryCtaHref === "/dashboard") {
+                            navigateToDashboard(e);
+                          }
+                        }}
+                      >
+                        {hero.primaryCta ?? "Go to Dashboard"}
                       </a>
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="lg"
-                      className="rounded-full border-2 border-teal-300 text-teal-700 hover:bg-teal-50 hover:text-blue-600 px-8 py-3 text-base font-bold"
-                      onClick={() => scrollToSection("how-it-works")}
-                    >
-                      Learn how it works
-                    </Button>
+                    {isHashLink(secondaryCtaHref) ? (
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        className="rounded-full border-2 border-teal-300 text-teal-700 hover:bg-teal-50 hover:text-blue-600 px-8 py-3 text-base font-bold"
+                        onClick={() => scrollToSection(secondaryCtaHref.slice(1))}
+                      >
+                        {hero.secondaryCta ?? "Learn how it works"}
+                      </Button>
+                    ) : (
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="lg"
+                        className="rounded-full border-2 border-teal-300 text-teal-700 hover:bg-teal-50 hover:text-blue-600 px-8 py-3 text-base font-bold"
+                      >
+                        <a href={secondaryCtaHref}>{hero.secondaryCta ?? "Learn how it works"}</a>
+                      </Button>
+                    )}
                   </div>
                 </div>
-                {showCarouselSection && (
-                  <div className="rounded-[32px] border border-border bg-muted/60 p-10 text-center text-sm text-muted-foreground">
-                    <img
-                      src="/logo.jpeg"
-                      alt="JalYantra logo"
-                      className="mx-auto h-10 w-10 rounded-full object-cover"
-                    />
-                    <div className="mt-6 h-64 w-full rounded-[24px] bg-muted" />
-                    <p className="mt-4">Image carousel placeholder</p>
-                  </div>
-                )}
+                {showCarouselSection && (() => {
+                  const mediaUrls = (hero.carouselMediaCsv || "").split(",").map(s => s.trim()).filter(Boolean);
+                  const hasMedia = mediaUrls.length > 0;
+                  
+                  return (
+                    <div className="rounded-[32px] border border-border bg-muted/30 p-4 sm:p-8 text-center">
+                      <img
+                        src={hero.logoUrl ?? "/logo.jpeg"}
+                        alt="JalYantra logo"
+                        className="mx-auto h-10 w-10 rounded-full object-cover shadow-sm ring-2 ring-teal-100"
+                      />
+                      
+                      <div className="mt-6 relative h-64 sm:h-80 w-full rounded-[24px] overflow-hidden bg-muted group">
+                        {!hasMedia ? (
+                          <div className="h-full w-full flex items-center justify-center bg-teal-50/30">
+                            <Award className="h-16 w-16 text-teal-100" />
+                          </div>
+                        ) : (
+                          <HeroCarousel items={mediaUrls} />
+                        )}
+                      </div>
+                      <p className="mt-4 text-sm font-medium text-muted-foreground">{hero.carouselText ?? "JalYantra Field Operations"}</p>
+                    </div>
+                  );
+                })()}
+
               </div>
 
             </section>
@@ -333,24 +440,24 @@ Details: ${contactInfo.details}`,
             </div>
           </div>
 
-          <section className="container mx-auto space-y-8 px-4" id="how-it-works">
-            <div className="space-y-3">
-              <p className="section-heading-label">Insights that drive action</p>
-              <h2 className="section-heading-title">Insights that turn into action</h2>
-              <p className="section-heading-description">
-                Designed for farmers, NGOs, and panchayat stakeholders—clear visuals, simple language, and exportable evidence.
-              </p>
-            </div>
-            <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-              {insightCards.map((card, index) => (
-                <div key={card.title} className="rounded-[24px] border-2 border-teal-100 bg-card/70 p-6 shadow-md hover:shadow-lg hover:border-teal-300 transition-all">
-                  {card.icon && (
-                    <img
-                      src={card.icon}
-                      alt={`${card.title} icon`}
-                      className="mb-3 h-14 w-14"
-                    />
-                  )}
+	          <section className="container mx-auto space-y-8 px-4" id="how-it-works">
+	            <div className="space-y-3">
+	              <p className="section-heading-label">{insights.kicker}</p>
+	              <h2 className="section-heading-title">{insights.heading}</h2>
+	              <p className="section-heading-description">
+	                {insights.description}
+	              </p>
+	            </div>
+	            <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+		              {insights.cards.map((card, index) => (
+		                <div key={card.title} className="rounded-[24px] border-2 border-teal-100 bg-card/70 p-6 shadow-md hover:shadow-lg hover:border-teal-300 transition-all">
+		                  {card.icon && (
+		                    <ZoomableImage
+		                      src={resolveImageSrc(card.icon)}
+		                      alt={`${card.title} icon`}
+		                      className="mb-3 h-14 w-14"
+		                    />
+		                  )}
                   <p className="text-sm font-bold" style={{ color: '#14b8a6' }}>0{index + 1}</p>
                   <h3 className="text-xl font-bold text-foreground mt-1">{card.title}</h3>
                   <p className="text-base text-muted-foreground mt-2 leading-relaxed">{card.description}</p>
@@ -359,36 +466,36 @@ Details: ${contactInfo.details}`,
             </div>
           </section>
 
-          <section className="container mx-auto space-y-8 px-4" id="dashboard">
-            <div className="space-y-3 text-center">
-              <p className="text-base uppercase tracking-[0.4em] font-bold" style={{ color: '#0d9488' }}>Dashboard</p>
-              <h2 className="text-4xl font-bold text-foreground">What users see</h2>
-              <p className="text-lg text-muted-foreground leading-relaxed">
-                A clean summary for quick decisions—then drill down to districts, locations, graphs, and exportable history.
-              </p>
-            </div>
-            <div className="grid gap-5 md:grid-cols-4">
-              {dashboardStats.map((stat) => (
-                <div key={stat.label} className="rounded-[24px] border-2 border-teal-100 bg-gradient-to-br from-teal-50 to-white p-6 text-muted-foreground shadow-md">
-                  <p className="text-sm uppercase tracking-[0.3em] font-semibold text-teal-500">{stat.label}</p>
-                  <p className="mt-2 text-4xl font-extrabold" style={{ color: '#0f766e' }}>{stat.value}</p>
+	          <section className="container mx-auto space-y-8 px-4" id="dashboard">
+	            <div className="space-y-3 text-center">
+	              <p className="text-base uppercase tracking-[0.4em] font-bold" style={{ color: '#0d9488' }}>{dashboardContent.kicker}</p>
+	              <h2 className="text-3xl sm:text-4xl font-bold text-foreground">{dashboardContent.heading}</h2>
+	              <p className="text-lg text-muted-foreground leading-relaxed">
+	                {dashboardContent.description}
+	              </p>
+	            </div>
+	            <div className="grid gap-5 md:grid-cols-4">
+	              {dashboardContent.stats.map((stat: any) => (
+	                <div key={stat.label} className="rounded-[24px] border-2 border-teal-100 bg-gradient-to-br from-teal-50 to-white p-6 text-muted-foreground shadow-md">
+	                  <p className="text-sm uppercase tracking-[0.3em] font-semibold text-teal-500">{stat.label}</p>
+	                  <p className="mt-2 text-4xl font-extrabold" style={{ color: '#0f766e' }}>{stat.value}</p>
                   <p className="text-base text-muted-foreground mt-1">{stat.note}</p>
                 </div>
               ))}
-            </div>
-	            <div className="grid gap-5 lg:grid-cols-[0.6fr_1.4fr]">
-	              <div className="rounded-[32px] border-2 border-teal-100 bg-card/70 p-7">
-	                <div className="flex items-center justify-between">
-	                  <span className="text-lg font-bold text-foreground">Active Alerts</span>
-	                  <span className="text-sm font-semibold bg-red-100 text-red-700 px-3 py-1 rounded-full">
-	                    {alertItems.length} Active
-	                  </span>
-	                </div>
-	                <div className="mt-5 space-y-3 text-muted-foreground">
-	                  {alertItems.map((alert) => (
-	                    <p
-	                      key={alert.text}
-	                      className={
+	            </div>
+			            <div className="grid gap-5 lg:grid-cols-[0.6fr_1.4fr]">
+			              <div className="rounded-[32px] border-2 border-teal-100 bg-card/70 p-7">
+				                <div className="flex items-center justify-between">
+				                  <span className="text-lg font-bold text-foreground">{dashboardContent.alertsTitle}</span>
+				                  <span className="text-sm font-semibold bg-red-100 text-red-700 px-3 py-1 rounded-full">
+				                    {dashboardContent.alerts.length} Active
+				                  </span>
+				                </div>
+				                <div className="mt-5 space-y-3 text-muted-foreground">
+				                  {dashboardContent.alerts.map((alert: any) => (
+				                    <p
+				                      key={alert.text}
+				                      className={
 	                        alert.tone === "danger"
 	                          ? "rounded-2xl border border-[#f4c2c2] bg-[#fff5f5] px-5 py-4 text-sm font-medium text-[#a02e2e]"
 	                          : "rounded-2xl border border-[#bfe9c6] bg-[#f2fff5] px-5 py-4 text-sm font-medium text-[#1b6b2a]"
@@ -399,82 +506,193 @@ Details: ${contactInfo.details}`,
 	                  ))}
 	                </div>
 	              </div>
-              <div className="rounded-[32px] border-2 border-teal-100 bg-card/70 p-7">
+	              <div className="rounded-[32px] border-2 border-teal-100 bg-card/70 p-7">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
-                    <p className="text-lg font-bold text-foreground">Interactive Sensor Map</p>
-                    <p className="text-sm text-muted-foreground mt-1">Click markers for readings</p>
+                    <p className="text-lg font-bold text-foreground">{dashboardContent.mapTitle ?? "Interactive Sensor Map"}</p>
+                    <p className="text-sm text-muted-foreground mt-1">{dashboardContent.mapSubtitle ?? "Click markers for readings"}</p>
                   </div>
                   <span className="rounded-full border-2 border-teal-200 bg-teal-50 px-4 py-1.5 text-sm font-semibold text-teal-600">
-                    5 sensors
+                    {dashboardContent.mapBadge ?? "5 sensors"}
                   </span>
                 </div>
-                <img
-                  src="/interactive-map.png"
+                <ZoomableImage
+                  src={resolveImageSrc(dashboardContent.mapImageUrl ?? "/interactive-map.png")}
                   alt="Interactive sensor map"
                   className="h-64 w-full rounded-[24px] object-cover"
                 />
-                <div className="mt-4 flex flex-wrap gap-2 text-sm font-semibold uppercase tracking-[0.3em]" style={{ color: '#14b8a6' }}>
-                  <span>📍 Layer: Sensor</span>
-                  <span>🌐 Layer: Network</span>
-                  <span>🔍 Drill-down modal</span>
-                </div>
-              </div>
+	                <div className="mt-4 flex flex-wrap gap-2 text-sm font-semibold uppercase tracking-[0.3em]" style={{ color: '#14b8a6' }}>
+	                  {dashboardContent.mapChips.map((chip: string) => (
+	                    <span key={chip}>{chip}</span>
+	                  ))}
+	                </div>
+	              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
-              <img src="/1.png" alt="Alert 1" className="w-full h-[300px] md:h-[600px] rounded-[24px] object-cover border-2 border-teal-100 shadow-md hover:shadow-lg transition-all" />
-              <img src="/graph.png" alt="Graph" className="w-full h-[300px] md:h-[600px] rounded-[24px] object-cover border-2 border-teal-100 shadow-md hover:shadow-lg transition-all" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+              {dashboardScreenshots.map((url) => (
+                <ZoomableImage
+                  key={url}
+                  src={resolveImageSrc(url)}
+                  alt="Dashboard screenshot"
+                  className="w-full h-[280px] sm:h-[420px] rounded-[28px] object-cover border-2 border-teal-100 shadow-md hover:shadow-xl transition-all"
+                />
+              ))}
             </div>
+
           </section>
 
-          {showDeploymentsSection && (
-            <section className="container mx-auto space-y-8 px-4" id="deployments">
-              <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">Field work</p>
-                <h2 className="text-3xl font-bold text-foreground">Deployments & NGO collaboration</h2>
-                <p className="text-sm text-muted-foreground">
-                  Showcase installations, farmer trainings, and community meetings. Add partner logos and pilot geography.
-                </p>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                {deploymentCards.map((card) => (
-                  <div key={card.title} className="rounded-[32px] border border-border bg-card/70 p-4">
-                    <div className="h-40 w-full rounded-[24px] bg-muted" />
-                    <h3 className="mt-4 text-lg font-semibold text-foreground">{card.title}</h3>
-                    <p className="text-sm text-muted-foreground">{card.subtitle}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+	          {showDeploymentsSection && (
+	            <section className="container mx-auto space-y-8 px-4" id="deployments">
+	              <div className="space-y-2">
+	                <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">{deploymentsContent.kicker}</p>
+	                <h2 className="text-3xl font-bold text-foreground">{deploymentsContent.heading}</h2>
+	                <p className="text-sm text-muted-foreground">
+	                  {deploymentsContent.description}
+	                </p>
+                </div>
+              <div className="grid gap-3 lg:grid-cols-2">
 
-          {showValidationSection && (
-            <section className="container mx-auto space-y-8 px-4" id="validation">
-              <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">Validation</p>
-                <h2 className="text-3xl font-bold text-foreground">Certificates, LORs & endorsements</h2>
-                <p className="text-sm text-muted-foreground">
-                  Build trust with proof: calibration notes, validation letters, certificates, and press mentions.
-                </p>
-              </div>
-              <div className="grid gap-4 md:grid-cols-3">
-                {validationCards.map((card) => (
-                  <div key={card.title} className="rounded-[32px] border border-border bg-card/70 p-5">
-                    <div className="h-32 w-full rounded-[20px] bg-muted" />
-                    <h3 className="mt-4 text-lg font-semibold text-foreground">{card.title}</h3>
-                    <p className="text-sm text-muted-foreground">{card.detail}</p>
+                <div className="rounded-[24px] border border-border bg-card/70 p-3 sm:p-4 flex flex-col justify-center">
+                  <div className="overflow-hidden rounded-[20px] bg-muted shadow-sm">
+                    {deploymentsPreviewVideoUrl ? (
+                      <div className="mx-auto w-full">
+                        <div className="aspect-[16/9] w-full bg-black shadow-lg">
+                          {toDrivePreviewUrl(deploymentsPreviewVideoUrl) ? (
+                            <iframe
+                              title="Deployment preview video"
+                              src={toDrivePreviewUrl(deploymentsPreviewVideoUrl) ?? undefined}
+                              className="h-full w-full"
+                              allow="autoplay; encrypted-media"
+                              allowFullScreen
+                            />
+                          ) : (
+                            <video className="h-full w-full object-cover" src={deploymentsPreviewVideoUrl} controls playsInline />
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-48 w-full flex items-center justify-center text-xs font-mono text-muted-foreground">
+                        {deploymentsContent.videoPlaceholder}
+                      </div>
+                    )}
                   </div>
-                ))}
+                  {deploymentsContent.videoCaption && !deploymentsContent.videoCaption.includes('managed from the Admin panel') && (
+                    <p className="mt-2 text-center text-[11px] text-muted-foreground italic leading-tight">
+                      {deploymentsContent.videoCaption}
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid gap-2 grid-cols-2">
+                  {(deploymentsPreviewImages.length ? deploymentsPreviewImages : deploymentsContent.placeholderCards.slice(0, 4)).map((item: any, idx: number) =>
+                    typeof item === "string" ? (
+                      <div key={item} className="overflow-hidden rounded-[20px] border border-border bg-card/70 shadow-sm transition-all hover:shadow-md aspect-[4/3] h-full">
+                        <ZoomableImage
+                          src={resolveImageSrc(item)}
+                          alt={`Deployment preview ${idx + 1}`}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                    ) : (
+                      <div key={item.title} className="rounded-[20px] border border-border bg-card/70 p-3 flex flex-col justify-center items-center text-center aspect-[4/3] h-full">
+                        <div className="h-10 w-10 rounded-full bg-teal-50 flex items-center justify-center mb-1">
+                          <Award className="h-5 w-5 text-teal-200" />
+                        </div>
+                        <h3 className="text-[10px] font-semibold text-foreground leading-tight">{item.title}</h3>
+                        <p className="text-[9px] text-muted-foreground leading-tight">{item.subtitle}</p>
+                      </div>
+                    ),
+                  )}
+                </div>
               </div>
-              <div className="space-y-3">
-                <h3 className="text-2xl font-semibold text-foreground">Trusted by field partners</h3>
-                <p className="text-sm text-muted-foreground">
-                  Replace these placeholders with real names, roles, and short quotes.
-                </p>
-                <div className="grid gap-4 md:grid-cols-3">
-                  {testimonials.map((testimonial) => (
-                    <div key={testimonial.name} className="rounded-[32px] border border-border bg-card/80 p-5">
+
+
+
+              {isDeploymentsPageEnabled && (
+                <div className="flex justify-center pt-2">
+                  <Button
+                    size="lg"
+                    className="rounded-full px-10 py-3 text-base font-bold bg-teal-600 hover:bg-teal-700 shadow-lg"
+                    onClick={() => window.location.assign('/deployments')}
+	                  >
+	                    {deploymentsContent.showMoreLabel}
+	                  </Button>
+	                </div>
+	              )}
+	            </section>
+	          )}
+
+	          {showValidationSection && (
+	            <section className="container mx-auto space-y-8 px-4" id="validation">
+	              <div className="space-y-2">
+	                <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">{validationContent.kicker}</p>
+	                <h2 className="text-3xl font-bold text-foreground">{validationContent.heading}</h2>
+	                <p className="text-sm text-muted-foreground">
+	                  {validationContent.description}
+	                </p>
+	              </div>
+              <div className="grid gap-4 md:grid-cols-3">
+                {validationContent.cards.map((card) => {
+                  const mediaUrl = card.mediaUrl || "";
+                  const driveId = extractDriveFileId(mediaUrl);
+                  const isImage = /\.(jpg|jpeg|png|gif|webp|svg|avif)(\?|$)/i.test(mediaUrl) || (driveId && !mediaUrl.includes('preview'));
+                  const isVideo = /\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(mediaUrl) || (driveId && mediaUrl.includes('preview'));
+                  const isDoc = !isImage && !isVideo && mediaUrl.length > 0;
+
+                  return (
+                    <div key={card.title} className="group relative rounded-[32px] border border-border bg-card/70 p-5 transition-all hover:shadow-lg">
+                      <div className="overflow-hidden rounded-[20px] bg-muted h-32 w-full flex items-center justify-center">
+                        {isImage ? (
+                          <ZoomableImage
+                            src={resolveImageSrc(mediaUrl)}
+                            alt={card.title}
+                            className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                          />
+                        ) : isVideo ? (
+                          <div className="relative h-full w-full bg-black flex items-center justify-center">
+                            <Video className="h-10 w-10 text-white/50" />
+                            <a 
+                              href={mediaUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <PlayCircle className="h-12 w-12 text-white" />
+                            </a>
+                          </div>
+                        ) : isDoc ? (
+                          <a 
+                            href={mediaUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex flex-col items-center gap-2 text-teal-600 hover:text-teal-700 transition-colors"
+                          >
+                            <FileText className="h-12 w-12" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">View Document</span>
+                          </a>
+                        ) : (
+                          <div className="h-full w-full bg-teal-50/50 flex items-center justify-center">
+                            <Award className="h-10 w-10 text-teal-200" />
+                          </div>
+                        )}
+                      </div>
+                      <h3 className="mt-4 text-lg font-semibold text-foreground">{card.title}</h3>
+                      <p className="text-sm text-muted-foreground">{card.detail}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+	              <div className="space-y-3">
+	                <h3 className="text-2xl font-semibold text-foreground">{validationContent.testimonialsHeading}</h3>
+	                <p className="text-sm text-muted-foreground">
+	                  {validationContent.testimonialsDescription}
+	                </p>
+	                <div className="grid gap-4 md:grid-cols-3">
+	                  {validationContent.testimonials.map((testimonial) => (
+	                    <div key={testimonial.name} className="rounded-[32px] border border-border bg-card/80 p-5">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-full bg-muted" />
                         <div>
@@ -490,89 +708,91 @@ Details: ${contactInfo.details}`,
             </section>
           )}
 
-          <section className="container mx-auto space-y-8 px-4" id="contact">
-            <div className="space-y-3">
-              <p className="text-base uppercase tracking-[0.4em] font-bold" style={{ color: '#0d9488' }}>Contact</p>
-              <div className="flex items-center gap-4">
+	          <section className="container mx-auto space-y-8 px-4" id="contact">
+	            <div className="space-y-3">
+	              <p className="text-base uppercase tracking-[0.4em] font-bold" style={{ color: '#0d9488' }}>{contactContent.kicker}</p>
+	              <div className="flex flex-col sm:flex-row items-center gap-4">
                 <img
                   src="/logo.jpeg"
                   alt="JalYantra logo"
                   className="h-16 w-16 rounded-2xl object-cover ring-2 ring-teal-200 shadow-md"
                 />
-                <h2 className="text-4xl font-bold text-foreground">Run a pilot with us</h2>
-              </div>
-              <p className="text-lg text-muted-foreground leading-relaxed">
-                If you're an NGO, CSR team, research group, or panchayat network working on drought resilience, we can set up a pilot and track clear impact outcomes.
-              </p>
-            </div>
-            <div className="grid gap-8 rounded-[32px] border-2 border-teal-100 bg-card/80 p-8 lg:grid-cols-[1.1fr_0.9fr]">
-              <div className="space-y-5">
-                <div className="contact-card">
-                  <p className="text-base font-bold text-white uppercase tracking-[0.4em]">Pilot needs</p>
-                  <ul className="mt-4 list-disc space-y-3 pl-5 text-base">
-                    <li>Access to borewells + farmer consent</li>
-                    <li>Coordination for installation & community meetings</li>
-                    <li>Baseline + follow-up monitoring to evaluate impact</li>
-                  </ul>
-                  <p className="contact-note mt-5">
-                    Email us at <span>support@jalyantra.tech</span>
-                  </p>
-                  <p className="contact-note">
-                    Location: <span>Maharashtra (pilot geographies)</span>
-                  </p>
-                </div>
-              </div>
-              <form className="space-y-4" onSubmit={handleContactSubmit}>
-                <input
-                  type="text"
-                  placeholder="Your Name"
-                  name="name"
+	                <h2 className="text-3xl sm:text-4xl font-bold text-foreground">{contactContent.heading}</h2>
+	              </div>
+	              <p className="text-lg text-muted-foreground leading-relaxed">
+	                {contactContent.description}
+	              </p>
+	            </div>
+	            <div className="grid gap-8 rounded-[32px] border-2 border-teal-100 bg-card/80 p-4 sm:p-8 lg:grid-cols-[1.1fr_0.9fr]">
+	              <div className="space-y-5">
+	                <div className="contact-card">
+	                  <p className="text-base font-bold text-white uppercase tracking-[0.4em]">{contactContent.pilotNeedsHeading}</p>
+	                  <ul className="mt-4 list-disc space-y-3 pl-5 text-base">
+	                    {contactContent.pilotNeedsItems.map((item) => (
+	                      <li key={item}>{item}</li>
+	                    ))}
+	                  </ul>
+	                  <p className="contact-note mt-5">
+	                    {contactContent.emailLabel} <span>{contactContent.emailValue}</span>
+	                  </p>
+	                  <p className="contact-note">
+	                    {contactContent.locationLabel} <span>{contactContent.locationValue}</span>
+	                  </p>
+	                </div>
+	              </div>
+	              <form className="space-y-4" onSubmit={handleContactSubmit}>
+	                <input
+	                  type="text"
+	                  placeholder={contactContent.form.namePlaceholder}
+	                  name="name"
                   value={contactInfo.name}
                   onChange={handleContactChange}
                   required
                   className="w-full rounded-[18px] border-2 border-teal-100 bg-card/60 px-5 py-4 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-teal-400"
                 />
-                <input
-                  type="text"
-                  placeholder="Organization"
-                  name="organization"
+	                <input
+	                  type="text"
+	                  placeholder={contactContent.form.organizationPlaceholder}
+	                  name="organization"
                   value={contactInfo.organization}
                   onChange={handleContactChange}
                   className="w-full rounded-[18px] border-2 border-teal-100 bg-card/60 px-5 py-4 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-teal-400"
                 />
-                <input
-                  type="email"
-                  placeholder="support@jalyantra.tech"
-                  name="email"
+	                <input
+	                  type="email"
+	                  placeholder={contactContent.form.emailPlaceholder}
+	                  name="email"
                   value={contactInfo.email}
                   onChange={handleContactChange}
                   required
                   className="w-full rounded-[18px] border-2 border-teal-100 bg-card/60 px-5 py-4 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-teal-400"
                 />
-                <select
+	                <select
                   name="interest"
                   value={contactInfo.interest}
                   onChange={handleContactChange}
                   required
                   className="w-full rounded-[18px] border-2 border-teal-100 bg-card/60 px-5 py-4 text-base text-foreground focus:outline-none focus:border-teal-400"
-                >
-                  <option value="" disabled>
-                    Interested in…
-                  </option>
-                  <option value="Dashboards & alerts">Dashboards & alerts</option>
-                  <option value="Field deployment">Field deployment</option>
-                  <option value="Validation support">Validation support</option>
-                </select>
-                <textarea
-                  placeholder="Tell us your district(s), number of borewells, and what outcomes you want to measure."
-                  name="details"
+	                >
+	                  <option value="" disabled>
+	                    {contactContent.form.interestPlaceholder}
+	                  </option>
+	                  {contactContent.form.interestOptions.map((opt) => (
+	                    <option key={opt} value={opt}>
+	                      {opt}
+	                    </option>
+	                  ))}
+	                </select>
+	                <textarea
+	                  placeholder={contactContent.form.detailsPlaceholder}
+	                  name="details"
                   value={contactInfo.details}
                   onChange={handleContactChange}
                   className="h-28 w-full rounded-[18px] border-2 border-teal-100 bg-card/60 px-5 py-4 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-teal-400"
-                />
-                <Button className="w-full rounded-full bg-teal-600 hover:bg-teal-700 text-base font-bold uppercase tracking-[0.3em] py-6 shadow-md">
-                  {status === "sending" ? "Sending..." : "Send Message"}
-                </Button>
+	                />
+	                <Button className="w-full rounded-full bg-teal-600 hover:bg-teal-700 text-base font-bold uppercase tracking-[0.3em] py-6 shadow-md">
+	                  {status === "sending" ? contactContent.form.sendingLabel : contactContent.form.submitLabel}
+	                </Button>
                 {status !== "idle" && (
                   <p
                     className={

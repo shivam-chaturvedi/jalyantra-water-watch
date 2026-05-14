@@ -37,6 +37,7 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [availableLocations, setAvailableLocations] = useState<string[]>([]);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const readingsPath = (import.meta.env.VITE_FIREBASE_READINGS_PATH as string | undefined) ?? 'readings';
 
   const processSnapshot = useCallback((value: FirebaseReadings) => {
     const sensorData = transformFirebaseReadings(value);
@@ -71,13 +72,13 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
   const fetchLatest = useCallback(async () => {
     setIsLoading(true);
     try {
-      const snapshot = await get(ref(database, 'readings'));
-      processSnapshot(snapshot.val());
+      const snapshot = await get(ref(database, readingsPath));
+      processSnapshot((snapshot.val() ?? {}) as FirebaseReadings);
     } catch (error) {
       console.error('Failed to fetch Firebase readings', error);
       setIsLoading(false);
     }
-  }, [processSnapshot]);
+  }, [processSnapshot, readingsPath]);
 
   useEffect(() => {
     fetchLatest();
@@ -85,16 +86,19 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
 
   useEffect(() => {
     if (!isLive) return;
-
-    const readingsRef = ref(database, 'readings');
-    const unsubscribe = onValue(readingsRef, (snapshot) => {
-      processSnapshot(snapshot.val());
-    }, (error) => {
-      console.error('Realtime subscription error', error);
-    });
+    const readingsRef = ref(database, readingsPath);
+    const unsubscribe = onValue(
+      readingsRef,
+      (snapshot) => {
+        processSnapshot((snapshot.val() ?? {}) as FirebaseReadings);
+      },
+      (error) => {
+        console.error('Realtime subscription error', error);
+      },
+    );
 
     return () => unsubscribe();
-  }, [isLive, processSnapshot]);
+  }, [isLive, processSnapshot, readingsPath]);
 
   const refreshData = useCallback(() => {
     fetchLatest();

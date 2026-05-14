@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,12 +37,17 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background px-4 py-8">
+    <div className="min-h-screen bg-background px-4 flex items-center justify-center">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6 rounded-2xl border border-border bg-muted/60 p-6 shadow-lg">
+        <div className="flex justify-start">
+          <Button variant="ghost" size="sm" onClick={() => window.location.assign('/')}>
+            Go back to website
+          </Button>
+        </div>
         <div className="space-y-2 text-center">
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">JALYANTRA</p>
           <h1 className="text-2xl font-bold text-foreground">Login</h1>
-          <p className="text-sm text-muted-foreground">Sign in with an admin account to access the dashboard.</p>
+          <p className="text-sm text-muted-foreground">Sign in with an admin account to access the admin panel.</p>
         </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
@@ -84,16 +89,6 @@ const LoginPage = () => {
             {actionLoading ? 'Signing in…' : 'Sign in'}
           </Button>
         </form>
-
-        <p className="text-center text-xs uppercase tracking-[0.3em] text-muted-foreground">Need access?</p>
-        <div className="text-center text-sm text-muted-foreground">
-          <p>
-            If you are a registered admin, go to the <Link className="underline" to="/signup">signup</Link> page.
-          </p>
-          <p className="mt-1">
-            Not an admin? Ask someone to add your UID under <code className="font-mono text-[11px]">/admins</code>.
-          </p>
-        </div>
       </div>
     </div>
   );

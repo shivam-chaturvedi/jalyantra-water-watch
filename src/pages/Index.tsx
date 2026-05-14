@@ -12,8 +12,6 @@ import { downloadDataAsCsv } from '@/lib/csv';
 import { SensorHistoryModal } from '@/components/SensorHistoryModal';
 import { FocusedDevicePanel } from '@/components/FocusedDevicePanel';
 import { motion } from 'framer-motion';
-import { onValue, ref } from 'firebase/database';
-import { database } from '@/lib/firebaseClient';
 
 const LOCATION_ALL_KEY = 'all-locations';
 const DATE_ALL_KEY = 'all-dates';
@@ -43,17 +41,6 @@ const Index = () => {
   const [selectedLocation, setSelectedLocation] = useState<string>(LOCATION_ALL_KEY);
   const [selectedDate, setSelectedDate] = useState<string>(DATE_ALL_KEY);
   const mapSectionRef = useRef<HTMLDivElement>(null);
-  const [sensorDataSnapshot, setSensorDataSnapshot] = useState<Record<string, unknown> | null>(null);
-  useEffect(() => {
-    const sensorDataRef = ref(database, 'sensorData');
-    const unsubscribe = onValue(sensorDataRef, (snapshot) => {
-      setSensorDataSnapshot(snapshot.val());
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, []);
 
   useEffect(() => {
     if (selectedLocation === LOCATION_ALL_KEY) return;
@@ -97,11 +84,6 @@ const Index = () => {
 
   const locationFilter = selectedLocation === LOCATION_ALL_KEY ? null : selectedLocation;
   const dateFilter = selectedDate === DATE_ALL_KEY ? null : selectedDate;
-
-  const sensorDataEntryCount = useMemo(() => {
-    if (!sensorDataSnapshot) return 0;
-    return Object.keys(sensorDataSnapshot).length;
-  }, [sensorDataSnapshot]);
 
   const filteredSensors = useMemo(() => {
     return sensors.filter((sensor) => {
@@ -230,31 +212,6 @@ const Index = () => {
           <FocusedDevicePanel sensor={focusSensor} />
         </div>
       )}
-
-      {/* Sensor Data Mirror */}
-      <div className="jal-card-elevated overflow-hidden">
-        <div className="p-4 border-b border-border flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Realtime sensorData</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">Reading /sensorData and writing /sensorData/test</p>
-            </div>
-            <span className="text-[11px] font-mono text-muted-foreground">
-              Entries: {sensorDataEntryCount}
-            </span>
-          </div>
-          <div className="p-4 space-y-2">
-            {sensorDataSnapshot ? (
-              <pre className="max-h-40 overflow-auto rounded border border-border bg-background/60 p-3 text-[11px] font-mono text-foreground">
-                {JSON.stringify(sensorDataSnapshot, null, 2)}
-              </pre>
-            ) : (
-              <p className="text-xs text-muted-foreground">Waiting for data under /sensorData to appear.</p>
-            )}
-            <p className="text-xs uppercase tracking-widest text-muted-foreground">
-              Heartbeat pushes happen automatically after auth changes.
-            </p>
-          </div>
-        </div>
 
         {/* District Quick Overview */}
         <div className="jal-card">

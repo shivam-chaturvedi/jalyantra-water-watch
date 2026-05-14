@@ -22,7 +22,7 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-4 text-center">
         <p className="text-lg font-semibold text-foreground">Access Denied</p>
         <p className="text-sm text-muted-foreground">
-          Only admin accounts listed under <code className="font-mono text-xs">/admins/&lt;uid&gt; = true</code> can enter.
+          Only admin accounts with <code className="font-mono text-xs">profiles.is_admin = true</code> can enter.
         </p>
         <Link
           to="/login"

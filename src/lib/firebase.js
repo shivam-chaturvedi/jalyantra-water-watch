@@ -4,6 +4,7 @@ const firebaseConfig = {
     import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'water-sensor-a14d5.firebaseapp.com',
   databaseURL:
     import.meta.env.VITE_FIREBASE_DATABASE_URL ||
+    import.meta.env.VITE_FIREBASE_RTDB_URL ||
     'https://water-sensor-a14d5-default-rtdb.asia-southeast1.firebasedatabase.app',
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'water-sensor-a14d5',
   storageBucket:

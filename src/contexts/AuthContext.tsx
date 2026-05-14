@@ -1,15 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { get, ref } from 'firebase/database';
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  User,
-  onAuthStateChanged,
-} from 'firebase/auth';
-
-import { auth, database } from '@/lib/firebaseClient';
+import type { User } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabaseClient';
 
 type AuthContextValue = {
   user: User | null;
@@ -32,9 +24,14 @@ const resolveAuthError = (error: unknown) => {
   return 'An unexpected authentication error occurred.';
 };
 
-const checkAdminRights = async (uid: string) => {
-  const snapshot = await get(ref(database, `admins/${uid}`));
-  return snapshot.val() === true;
+const checkAdminRights = async (userId: string) => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.is_admin === true;
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -52,48 +49,52 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let active = true;
     setInitializing(true);
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const syncFromSession = async (sessionUser: User | null) => {
       if (!active) return;
       setInitializing(true);
 
-      if (!firebaseUser) {
-        if (active) {
-          setUser(null);
-          setIsAdmin(false);
-          setInitializing(false);
-        }
+      if (!sessionUser) {
+        setUser(null);
+        setIsAdmin(false);
+        setInitializing(false);
         return;
       }
 
       try {
-        const allowed = await checkAdminRights(firebaseUser.uid);
+        const allowed = await checkAdminRights(sessionUser.id);
         if (!active) return;
 
         if (!allowed) {
-          await signOut(auth);
-          setError('Access denied. Your email is not registered under /admins.');
+          await supabase.auth.signOut();
+          setError('Access denied. Your account is not marked as admin.');
           setUser(null);
           setIsAdmin(false);
         } else {
-          setUser(firebaseUser);
+          setUser(sessionUser);
           setIsAdmin(true);
           setError(null);
         }
-      } catch (authError) {
+      } catch {
         if (!active) return;
         setUser(null);
         setIsAdmin(false);
         setError('Unable to verify admin privileges. Try again in a moment.');
       } finally {
-        if (active) {
-          setInitializing(false);
-        }
+        if (active) setInitializing(false);
       }
+    };
+
+    supabase.auth.getSession().then(({ data }) => {
+      syncFromSession(data.session?.user ?? null);
+    });
+
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      syncFromSession(session?.user ?? null);
     });
 
     return () => {
       active = false;
-      unsubscribe();
+      subscription.subscription.unsubscribe();
     };
   }, []);
 
@@ -102,12 +103,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
 
     try {
-      const credential = await createUserWithEmailAndPassword(auth, email, password);
-      const allowed = await checkAdminRights(credential.user.uid);
+      const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
+      if (signUpError) throw signUpError;
 
+      const createdUser = data.user;
+      if (!createdUser) throw new Error('Account created, but no user returned.');
+
+      const allowed = await checkAdminRights(createdUser.id);
       if (!allowed) {
-        await signOut(auth);
-        const message = 'Your account is not authorized. Ask an admin to add your UID under /admins.';
+        await supabase.auth.signOut();
+        const message = 'Your account is not authorized. Ask an admin to set profiles.is_admin = true for your user.';
         setError(message);
         throw new Error(message);
       }
@@ -124,7 +129,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+      if (loginError) throw loginError;
     } catch (loginError) {
       setError(resolveAuthError(loginError));
       throw loginError;
@@ -137,7 +143,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setActionLoading(true);
     setError(null);
     try {
-      await signOut(auth);
+      const { error: logoutError } = await supabase.auth.signOut();
+      if (logoutError) throw logoutError;
     } catch (logoutError) {
       setError(resolveAuthError(logoutError));
       throw logoutError;
