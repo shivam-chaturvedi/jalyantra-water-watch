@@ -37,7 +37,8 @@ import {
 import { 
   resolveImageSrc, 
   toDrivePreviewUrl, 
-  extractDriveFileId 
+  extractDriveFileId,
+  toDriveStreamUrl
 } from '@/lib/driveLinks';
 import { ZoomableImage } from '@/components/ImageModalContext';
 
@@ -80,6 +81,98 @@ const FLAG_DEFS: Array<{ key: SiteFlagKey; label: string; description: string }>
   { key: 'show_image_carousel', label: 'Image carousel', description: 'Show/hide carousel section on Home (if present).' },
 ];
 
+// ─── Video Thumbnail Picker ──────────────────────────────────────────────────
+
+function VideoThumbnailPicker({ 
+  videoUrl, 
+  onCapture, 
+  disabled,
+  bucket = 'site-media'
+}: { 
+  videoUrl: string; 
+  onCapture: (url: string) => void; 
+  disabled?: boolean;
+  bucket?: 'site-media' | 'deployments-media';
+}) {
+  const [capturing, setCapturing] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const captureFrame = async () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+
+    setCapturing(true);
+    try {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      canvas.toBlob(async (blob) => {
+        if (!blob) return;
+        const file = new File([blob], `thumbnail-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        const res = await uploadFileToBucket(bucket, file, { folder: 'thumbnails' });
+        onCapture(res.publicUrl);
+        toast({ title: 'Thumbnail captured!' });
+      }, 'image/jpeg', 0.85);
+    } catch (err) {
+      toast({ title: 'Capture failed', variant: 'destructive' });
+    } finally {
+      setCapturing(false);
+    }
+  };
+
+  const displayUrl = toDriveStreamUrl(videoUrl) || videoUrl;
+  const isDrive = !!extractDriveFileId(videoUrl);
+
+  return (
+    <div className="space-y-3 rounded-xl border border-teal-100 bg-teal-50/20 p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold uppercase tracking-wider text-teal-700">Set Video Thumbnail</p>
+        <Button 
+          type="button" 
+          size="sm" 
+          onClick={captureFrame} 
+          disabled={disabled || capturing || isDrive}
+          className="bg-teal-600 hover:bg-teal-700 text-white h-7 text-[10px]"
+        >
+          {capturing ? 'Capturing...' : 'Capture current frame'}
+        </Button>
+      </div>
+      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
+        {isDrive ? (
+          <div className="flex h-full w-full flex-col items-center justify-center p-6 text-center">
+            <Video className="mb-2 h-8 w-8 text-teal-200/50" />
+            <p className="text-[11px] font-medium text-teal-100/80">Custom thumbnails are not supported for Google Drive links due to security (CORS) restrictions.</p>
+            <p className="mt-1 text-[10px] text-teal-100/50">To choose a specific frame, please upload the video file directly to Supabase.</p>
+          </div>
+        ) : (
+          <>
+            <video 
+              ref={videoRef} 
+              src={displayUrl} 
+              controls 
+              className="h-full w-full object-contain"
+              crossOrigin="anonymous"
+            />
+            <canvas ref={canvasRef} className="hidden" />
+          </>
+        )}
+      </div>
+      {!isDrive && (
+        <p className="text-[10px] text-muted-foreground leading-tight">
+          Seek to the frame you want to use as a preview, then click "Capture".
+        </p>
+      )}
+    </div>
+  );
+}
+
+
 // ─── MediaUploadField ─────────────────────────────────────────────────────────
 
 interface MediaUploadFieldProps {
@@ -87,7 +180,8 @@ interface MediaUploadFieldProps {
   hint?: string;
   value: string;
   onChange: (url: string) => void;
-  bucket: 'site-media' | 'deployments-media';
+  onThumbnail?: (url: string) => void;
+  bucket?: 'site-media' | 'deployments-media';
   folder?: string;
   mediaType?: 'image' | 'video' | 'any';
   disabled?: boolean;
@@ -99,7 +193,8 @@ function MediaUploadField({
   hint,
   value,
   onChange,
-  bucket,
+  onThumbnail,
+  bucket = 'site-media',
   folder = 'uploads',
   mediaType = 'any',
   disabled,
@@ -211,11 +306,27 @@ function MediaUploadField({
             type="button"
             onClick={() => onChange('')}
             disabled={disabled}
-            className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow transition hover:bg-red-600 disabled:opacity-50"
+            className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow transition hover:bg-red-600 disabled:opacity-50 z-10"
           >
             <X className="h-3 w-3" />
           </button>
         </div>
+      )}
+
+      {isVideo && trimmed && (
+        <VideoThumbnailPicker 
+          videoUrl={trimmed} 
+          onCapture={(url) => {
+             if (onThumbnail) {
+               onThumbnail(url);
+             } else {
+               toast({ title: 'Thumbnail URL copied!', description: url });
+               navigator.clipboard.writeText(url);
+             }
+          }}
+          disabled={disabled}
+          bucket={bucket}
+        />
       )}
 
       {/* Drop zone */}
@@ -1330,10 +1441,7 @@ export default function AdminPage() {
                         <FieldLabel label="Solution statement" hint="The 'Solution:' line in the hero" />
                         <Input value={heroField('solution')} onChange={(e) => setHeroField('solution', e.target.value)} disabled={isBusy} placeholder="LIDAR-based measurement with real-time dashboard…" />
                       </div>
-                      <div>
-                        <FieldLabel label="Carousel text" hint="Optional caption shown with the image carousel" />
-                        <Input value={heroField('carouselText')} onChange={(e) => setHeroField('carouselText', e.target.value)} disabled={isBusy} placeholder="Image carousel caption" />
-                      </div>
+                      <div />
                       <div>
                         <div className="mb-3">
                           <FieldLabel label="Carousel Media" hint="Add images or videos to the hero carousel" />
@@ -1365,18 +1473,24 @@ export default function AdminPage() {
                                   </div>
                                   
                                   <MediaUploadField
-                                    label=""
-                                    value={url}
-                                    onChange={(newUrl) => {
-                                      const updated = [...urls];
-                                      updated[idx] = newUrl;
-                                      setHeroField('carouselMediaCsv', updated.join(', '));
-                                    }}
-                                    bucket="site-media"
-                                    folder="hero-carousel"
-                                    mediaType="any"
-                                    disabled={isBusy}
-                                  />
+                                      label=""
+                                      value={url.split('|')[0]}
+                                      onChange={(u) => {
+                                        const parts = url.split('|');
+                                        const thumb = parts[1] ? `|${parts[1]}` : '';
+                                        const next = urls.map((x, i) => i === idx ? `${u}${thumb}` : x);
+                                        setHeroField('carouselMediaCsv', next.join(', '));
+                                      }}
+                                      onThumbnail={(thumbUrl) => {
+                                        const videoUrl = url.split('|')[0];
+                                        const next = urls.map((x, i) => i === idx ? `${videoUrl}|${thumbUrl}` : x);
+                                        setHeroField('carouselMediaCsv', next.join(', '));
+                                      }}
+                                      bucket="site-media"
+                                      folder="hero"
+                                      mediaType="video"
+                                      disabled={isBusy}
+                                    />
                                 </div>
                               ))}
                               

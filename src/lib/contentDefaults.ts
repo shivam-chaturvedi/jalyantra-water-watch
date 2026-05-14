@@ -128,7 +128,7 @@ export function getDefaultHomeContent(): HomeContent {
       secondaryCta: 'Learn how it works',
       secondaryCtaHref: '#how-it-works',
       logoUrl: '/logo.jpeg',
-      carouselText: 'Image carousel placeholder',
+      carouselText: '',
       carouselMediaCsv: '',
     },
     insights: {

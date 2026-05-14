@@ -17,13 +17,11 @@ import { ZoomableImage } from "@/components/ImageModalContext";
 import { FileText, PlayCircle, Video, Award } from "lucide-react";
 
 const baseNavLinks = [
-  { label: "Features", id: "features" },
-  { label: "How it works", id: "how-it-works" },
-  { label: "Dashboard", id: "dashboard" },
+  { label: "Home", id: "home" },
   { label: "Deployments", id: "deployments" },
-  { label: "Validation", id: "validation" },
   { label: "Contact", id: "contact" },
 ] as const;
+
 
 const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
   event.preventDefault();
@@ -36,6 +34,8 @@ function isHashLink(value: unknown): value is string {
 function HeroCarousel({ items }: { items: string[] }) {
   const [index, setIndex] = useState(0);
 
+  // Auto-cycling removed for manual control as requested
+  /*
   useEffect(() => {
     if (items.length <= 1) return;
     const interval = setInterval(() => {
@@ -43,8 +43,13 @@ function HeroCarousel({ items }: { items: string[] }) {
     }, 5000);
     return () => clearInterval(interval);
   }, [items]);
+  */
 
-  const current = items[index];
+  const raw = items[index];
+  const parts = raw.split('|');
+  const current = parts[0];
+  const thumbnailUrl = parts[1] ? resolveImageSrc(parts[1]) : null;
+
   const driveId = extractDriveFileId(current);
   const isVideo = /\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(current) || (driveId && current.includes('preview'));
 
@@ -57,13 +62,14 @@ function HeroCarousel({ items }: { items: string[] }) {
               title="Hero video"
               src={toDrivePreviewUrl(current) ?? undefined}
               className="h-full w-full"
-              allow="autoplay; encrypted-media"
+              allow="encrypted-media"
+              allowFullScreen
             />
           ) : (
             <video 
               src={current} 
-              autoPlay 
-              muted 
+              controls
+              poster={thumbnailUrl ?? undefined}
               loop 
               playsInline 
               className="h-full w-full object-cover" 
@@ -77,6 +83,7 @@ function HeroCarousel({ items }: { items: string[] }) {
           className="h-full w-full object-cover animate-in fade-in zoom-in duration-1000"
         />
       )}
+
       
       {items.length > 1 && (
         <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 z-10">
@@ -316,7 +323,7 @@ Details: ${contactInfo.details}`,
 
         <main className="space-y-24 pt-8 pb-16">
           <div className="w-full">
-            <section className="container mx-auto px-4" id="features">
+            <section className="container mx-auto px-4" id="home">
               <div className="grid gap-10 rounded-[32px] border border-border bg-card px-4 sm:px-8 py-10 sm:py-14 lg:grid-cols-[1.2fr_0.8fr]">
                 <div className="space-y-7">
                   <p className="text-base uppercase tracking-[0.4em] font-bold" style={{ color: '#0d9488' }}>
@@ -405,7 +412,7 @@ Details: ${contactInfo.details}`,
                           <HeroCarousel items={mediaUrls} />
                         )}
                       </div>
-                      <p className="mt-4 text-sm font-medium text-muted-foreground">{hero.carouselText ?? "JalYantra Field Operations"}</p>
+                      <div className="mt-4" />
                     </div>
                   );
                 })()}
