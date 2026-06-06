@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, MouseEvent, useCallback, useMemo, useState, useEffect } from "react";
+import { ChangeEvent, FormEvent, MouseEvent, useCallback, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Footer } from "@/components/Footer";
@@ -6,7 +6,7 @@ import GoogleTranslateDropdown from "@/components/GoogleTranslate";
 import { useAppPages, useSiteFlags } from "@/hooks/useSiteConfig";
 import NotFound from "./NotFound";
 import { useQuery } from "@tanstack/react-query";
-import { fetchDeployment, fetchSiteContent } from "@/lib/siteAdmin";
+import { fetchSiteContent } from "@/lib/siteAdmin";
 import { mergeHomeContentWithDefaults } from "@/lib/contentDefaults";
 import { 
   resolveImageSrc, 
@@ -15,13 +15,8 @@ import {
 } from "@/lib/driveLinks";
 import { ZoomableImage } from "@/components/ImageModalContext";
 import { FileText, PlayCircle, Video, Award } from "lucide-react";
-
-const baseNavLinks = [
-  { label: "Home", id: "home" },
-  { label: "Deployments", id: "deployments" },
-  { label: "Contact", id: "contact" },
-] as const;
-
+import { SiteMenu } from "@/components/SiteMenu";
+import { useGroundwaterData } from "@/hooks/useGroundwaterData";
 
 const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
   event.preventDefault();
@@ -104,28 +99,17 @@ function HeroCarousel({ items }: { items: string[] }) {
 }
 
 export default function Home() {
+  const { kpiStats, totalReadings, totalWaterMonitored } = useGroundwaterData();
   const flagsQuery = useSiteFlags();
   const pagesQuery = useAppPages();
   const homeContentQuery = useQuery({
     queryKey: ["site_content", "home"],
     queryFn: () => fetchSiteContent("home"),
   });
-  const deploymentsPreviewQuery = useQuery({
-    queryKey: ["deployments", "alibaug-raigad", "preview"],
-    queryFn: () => fetchDeployment("alibaug-raigad"),
-  });
-
   const isHomeEnabled =
     pagesQuery.data?.find((p) => p.path === "/")?.is_enabled ?? true;
-  const isDashboardEnabled =
-    pagesQuery.data?.find((p) => p.path === "/dashboard")?.is_enabled ?? true;
-  const showDeploymentsSection = flagsQuery.data?.show_deployments ?? true;
   const showValidationSection = flagsQuery.data?.show_validation ?? false;
   const showCarouselSection = flagsQuery.data?.show_image_carousel ?? true;
-
-  if (pagesQuery.isSuccess && !isHomeEnabled) {
-    return <NotFound />;
-  }
 
   const homeContent = useMemo(
     () => mergeHomeContentWithDefaults(homeContentQuery.data ?? {}),
@@ -137,37 +121,16 @@ export default function Home() {
   const deploymentsContent = homeContent.deployments;
   const validationContent = homeContent.validation;
   const contactContent = homeContent.contact;
+  const impactMetrics = [
+    { label: "Wells Monitored", value: kpiStats?.totalSensors ?? 0 },
+    { label: "Villages Reached", value: homeContent.dashboard.stats[0]?.value ?? "0" },
+    { label: "Districts Covered", value: homeContent.dashboard.stats[2]?.value ?? "0" },
+    { label: "Total Readings", value: totalReadings },
+    { label: "Total Water Monitored", value: totalWaterMonitored > 0 ? `${(totalWaterMonitored / 1000).toFixed(1)}K m` : "0" },
+  ];
 
   const primaryCtaHref = String((hero as any).primaryCtaHref ?? "/dashboard").trim() || "/dashboard";
   const secondaryCtaHref = String((hero as any).secondaryCtaHref ?? "#how-it-works").trim() || "#how-it-works";
-
-  const dashboardScreenshots = useMemo(() => {
-    const csv = String(dashboardContent.screenshotsCsv ?? "").trim();
-    return csv
-      ? csv
-          .split(",")
-          .map((u: string) => u.trim())
-          .filter(Boolean)
-      : [];
-  }, [dashboardContent.screenshotsCsv]);
-
-  const deploymentsPreview = (deploymentsPreviewQuery.data?.data ?? {}) as any;
-  const deploymentsPreviewVideoUrl = String(deploymentsPreview.previewVideoUrl ?? "").trim();
-  const deploymentsPreviewImages = useMemo(() => {
-    const arr = Array.isArray(deploymentsPreview.previewImages) ? deploymentsPreview.previewImages : [];
-    const urls = arr.filter((x: unknown) => typeof x === "string") as string[];
-    return urls.length ? urls.slice(0, 4) : [];
-  }, [deploymentsPreview.previewImages]);
-
-  const isDeploymentsPageEnabled =
-    pagesQuery.data?.find((p) => p.path === "/deployments")?.is_enabled ?? true;
-
-  const navLinks = baseNavLinks.filter((link) => {
-    if (link.id === "deployments") return showDeploymentsSection;
-    if (link.id === "validation") return showValidationSection;
-    if (link.id === "dashboard") return isDashboardEnabled;
-    return true;
-  });
 
   const [contactInfo, setContactInfo] = useState({
     name: "",
@@ -252,6 +215,10 @@ Details: ${contactInfo.details}`,
     }
   };
 
+  if (pagesQuery.isSuccess && !isHomeEnabled) {
+    return <NotFound />;
+  }
+
   const scrollToSection = useCallback((sectionId: string) => {
     const section = document.getElementById(sectionId);
     if (!section) return;
@@ -293,30 +260,11 @@ Details: ${contactInfo.details}`,
                 </p>
               </div>
             </a>
-            <nav className="hidden md:flex flex-1 justify-center gap-5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {navLinks.map((link) => (
-                <a key={link.id} href={`#${link.id}`} className="hover:text-teal-600 transition-colors">
-                  {link.label}
-                </a>
-              ))}
-            </nav>
+            <div className="hidden md:flex flex-1 justify-center">
+              <SiteMenu />
+            </div>
           <div className="ml-auto flex items-center gap-2">
             <GoogleTranslateDropdown className="max-w-[120px] sm:max-w-[180px]" />
-            {isDashboardEnabled && (
-              <Button
-                asChild
-                size="sm"
-                className="rounded-full px-3 sm:px-5 py-2 text-xs sm:text-sm font-bold bg-teal-600 text-white hover:bg-teal-700 hover:text-white shadow-md whitespace-nowrap"
-              >
-                <a
-                  href="/dashboard"
-                  onClick={navigateToDashboard}
-                  className="text-white hover:text-white"
-                >
-                  <p className="text-white"> Dashboard</p>
-                </a>
-              </Button>
-            )}
           </div>
           </div>
         </header>
@@ -536,100 +484,114 @@ Details: ${contactInfo.details}`,
 	              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-              {dashboardScreenshots.map((url) => (
-                <ZoomableImage
-                  key={url}
-                  src={resolveImageSrc(url)}
-                  alt="Dashboard screenshot"
-                  className="w-full h-[280px] sm:h-[420px] rounded-[28px] object-cover border-2 border-teal-100 shadow-md hover:shadow-xl transition-all"
-                />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+              {[
+                { title: "Depth Over Time", desc: "Track how groundwater depth changes daily across the monitoring period", img: "/graph.png" },
+                { title: "Pump Drawdown Chart", desc: "See depth drop during pump cycles and recovery after each run", img: "/graph.png" },
+                { title: "District Risk Overview", desc: "Compare average depth and risk level across all monitored districts", img: "/interactive-map.png" },
+                { title: "Monthly Extraction Trend", desc: "Visualise cumulative water drawn month-by-month for any device", img: "/graph.png" },
+              ].map((item) => (
+                <div
+                  key={item.title}
+                  className="group relative overflow-hidden rounded-[28px] border border-teal-100 bg-card/70 shadow-sm hover:shadow-md transition-all"
+                >
+                  <img
+                    src={item.img}
+                    alt={item.title}
+                    className="h-40 w-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                  />
+                  <div className="p-4">
+                    <p className="text-sm font-semibold text-foreground">{item.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
+                  </div>
+                </div>
               ))}
             </div>
 
           </section>
 
-	          {showDeploymentsSection && (
-	            <section className="container mx-auto space-y-8 px-4" id="deployments">
-	              <div className="space-y-2">
-	                <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">{deploymentsContent.kicker}</p>
-	                <h2 className="text-3xl font-bold text-foreground">{deploymentsContent.heading}</h2>
-	                <p className="text-sm text-muted-foreground">
-	                  {deploymentsContent.description}
-	                </p>
+          <section className="container mx-auto space-y-8 px-4">
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">Impact Metrics</p>
+              <h2 className="text-3xl font-bold text-foreground">What the program is reaching</h2>
+              <p className="text-sm text-muted-foreground">
+                High-level outcomes for communities and the monitoring network.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+              {impactMetrics.map((metric) => (
+                <div key={metric.label} className="rounded-[24px] border border-teal-100 bg-card/80 p-5 shadow-sm">
+                  <p className="text-xs uppercase tracking-[0.25em] text-teal-600 font-semibold">{metric.label}</p>
+                  <p className="mt-3 text-3xl font-bold text-foreground">{metric.value}</p>
                 </div>
-              <div className="grid gap-3 lg:grid-cols-2">
+              ))}
+            </div>
+          </section>
 
-                <div className="rounded-[24px] border border-border bg-card/70 p-3 sm:p-4 flex flex-col justify-center">
-                  <div className="overflow-hidden rounded-[20px] bg-muted shadow-sm">
-                    {deploymentsPreviewVideoUrl ? (
-                      <div className="mx-auto w-full">
-                        <div className="aspect-[16/9] w-full bg-black shadow-lg">
-                          {toDrivePreviewUrl(deploymentsPreviewVideoUrl) ? (
-                            <iframe
-                              title="Deployment preview video"
-                              src={toDrivePreviewUrl(deploymentsPreviewVideoUrl) ?? undefined}
-                              className="h-full w-full"
-                              allow="autoplay; encrypted-media"
-                              allowFullScreen
-                            />
-                          ) : (
-                            <video className="h-full w-full object-cover" src={deploymentsPreviewVideoUrl} controls playsInline />
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="h-48 w-full flex items-center justify-center text-xs font-mono text-muted-foreground">
-                        {deploymentsContent.videoPlaceholder}
-                      </div>
-                    )}
-                  </div>
-                  {deploymentsContent.videoCaption && !deploymentsContent.videoCaption.includes('managed from the Admin panel') && (
-                    <p className="mt-2 text-center text-[11px] text-muted-foreground italic leading-tight">
-                      {deploymentsContent.videoCaption}
-                    </p>
-                  )}
+          <section className="container mx-auto space-y-8 px-4">
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">Actionable Insights</p>
+              <h2 className="text-3xl font-bold text-foreground">What users see</h2>
+              <p className="text-sm text-muted-foreground">
+                Eight ready-to-use insight cards — shown side by side, in two rows.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                ["Estimated Water Drawn", "Understand how much water is extracted in each pump cycle"],
+                ["Days of Water Remaining", "Understand how long the well water lasts at current extraction level"],
+                ["Seasonal Water Extraction Trend", "Track how groundwater usage changes across seasons"],
+                ["Irrigation Intensity Indicator", "Understand whether water usage is above or below normal levels"],
+                ["Monsoon Recharge Gain", "See how much groundwater levels improve after the monsoon"],
+                ["Dry Run Risk Alerts", "Receive alerts when water levels fall too low for safe pumping and when it becomes safe again"],
+                ["Groundwater Recovery Tracking", "Discover how quickly wells recover after pumping"],
+                ["Seasonal Groundwater Trends", "Monitor how groundwater levels rise or fall over time"],
+              ].map(([title, description]) => (
+                <div key={title} className="rounded-[22px] border border-teal-100 bg-card/80 p-4 shadow-sm hover:shadow-md hover:border-teal-300 transition-all">
+                  <p className="text-sm font-semibold text-foreground">{title}</p>
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{description}</p>
                 </div>
+              ))}
+            </div>
+          </section>
 
-                <div className="grid gap-2 grid-cols-2">
-                  {(deploymentsPreviewImages.length ? deploymentsPreviewImages : deploymentsContent.placeholderCards.slice(0, 4)).map((item: any, idx: number) =>
-                    typeof item === "string" ? (
-                      <div key={item} className="overflow-hidden rounded-[20px] border border-border bg-card/70 shadow-sm transition-all hover:shadow-md aspect-[4/3] h-full">
-                        <ZoomableImage
-                          src={resolveImageSrc(item)}
-                          alt={`Deployment preview ${idx + 1}`}
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
-                      </div>
-                    ) : (
-                      <div key={item.title} className="rounded-[20px] border border-border bg-card/70 p-3 flex flex-col justify-center items-center text-center aspect-[4/3] h-full">
-                        <div className="h-10 w-10 rounded-full bg-teal-50 flex items-center justify-center mb-1">
-                          <Award className="h-5 w-5 text-teal-200" />
-                        </div>
-                        <h3 className="text-[10px] font-semibold text-foreground leading-tight">{item.title}</h3>
-                        <p className="text-[9px] text-muted-foreground leading-tight">{item.subtitle}</p>
-                      </div>
-                    ),
-                  )}
+          <section className="container mx-auto space-y-8 px-4 hidden" aria-hidden="true">
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">{deploymentsContent.kicker}</p>
+              <h2 className="text-3xl font-bold text-foreground">{deploymentsContent.heading}</h2>
+            </div>
+          </section>
+
+          <section className="container mx-auto space-y-8 px-4 hidden" aria-hidden="true">
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">Awards & Certifications</p>
+              <h2 className="text-3xl font-bold text-foreground">Keep this hidden for now</h2>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {["Award card 1", "Award card 2", "Certificate card 3", "Certificate card 4"].map((title) => (
+                <div key={title} className="rounded-[22px] border border-border bg-card/70 p-4 text-sm text-muted-foreground">
+                  {title}
                 </div>
-              </div>
+              ))}
+            </div>
+          </section>
 
-
-
-              {isDeploymentsPageEnabled && (
-                <div className="flex justify-center pt-2">
-                  <Button
-                    size="lg"
-                    className="rounded-full px-10 py-3 text-base font-bold bg-teal-600 hover:bg-teal-700 shadow-lg"
-                    onClick={() => window.location.assign('/deployments')}
-	                  >
-	                    {deploymentsContent.showMoreLabel}
-	                  </Button>
-	                </div>
-	              )}
-	            </section>
-	          )}
+          <section className="container mx-auto space-y-8 px-4 hidden" aria-hidden="true">
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">Media</p>
+              <h2 className="text-3xl font-bold text-foreground">Press and publication cards</h2>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {["Publication card 1", "Publication card 2", "Publication card 3"].map((title) => (
+                <div key={title} className="rounded-[26px] border border-border bg-card/70 p-4 shadow-sm">
+                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">Publication Name</div>
+                  <div className="mt-3 h-40 rounded-[18px] bg-muted" />
+                  <p className="mt-3 text-sm font-semibold text-foreground">{title}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Read article</p>
+                </div>
+              ))}
+            </div>
+          </section>
 
 	          {showValidationSection && (
 	            <section className="container mx-auto space-y-8 px-4" id="validation">
@@ -740,7 +702,13 @@ Details: ${contactInfo.details}`,
 	                    ))}
 	                  </ul>
 	                  <p className="contact-note mt-5">
-	                    {contactContent.emailLabel} <span>{contactContent.emailValue}</span>
+	                    {contactContent.emailLabel}{" "}
+                    <a
+                      href={`mailto:${contactContent.emailValue}`}
+                      className="underline hover:opacity-80"
+                    >
+                      Get in touch via email
+                    </a>
 	                  </p>
 	                  <p className="contact-note">
 	                    {contactContent.locationLabel} <span>{contactContent.locationValue}</span>

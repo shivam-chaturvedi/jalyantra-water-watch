@@ -18,6 +18,8 @@ interface UseGroundwaterDataReturn {
   districts: District[];
   alerts: Alert[];
   kpiStats: KPIStats | null;
+  totalReadings: number;
+  totalWaterMonitored: number;
   isLoading: boolean;
   isLive: boolean;
   lastUpdated: Date | null;
@@ -109,6 +111,8 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
     districts,
     alerts,
     kpiStats,
+    totalReadings: kpiStats?.totalReadings ?? 0,
+    totalWaterMonitored: kpiStats?.totalWaterMonitored ?? 0,
     isLoading,
     isLive,
     lastUpdated,

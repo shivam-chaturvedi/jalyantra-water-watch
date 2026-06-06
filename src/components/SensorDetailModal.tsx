@@ -66,13 +66,13 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
             className="fixed inset-0 bg-foreground/30 backdrop-blur-sm z-50"
           />
 
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 pointer-events-none">
+          <div className="fixed inset-0 z-50 flex items-center justify-end px-4 py-6 pointer-events-none">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="w-full max-w-3xl bg-card rounded-2xl border border-border shadow-2xl overflow-hidden max-h-[92vh] sm:max-h-[85vh] pointer-events-auto"
+              className="w-full max-w-3xl bg-card rounded-2xl border border-border shadow-2xl overflow-hidden max-h-[92vh] pointer-events-auto"
             >
               <div className="gradient-header p-5 text-white">
                 <div className="flex items-center justify-between">
@@ -99,7 +99,7 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
                 </div>
               </div>
 
-              <div className="p-5 space-y-5 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 120px)' }}>
+              <div className="p-5 space-y-5 overflow-y-auto" style={{ maxHeight: 'calc(92vh - 120px)' }}>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="jal-card text-center">
                     <Activity
@@ -171,10 +171,10 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
                         <BarChart3 className="w-4 h-4 text-accent" />
                         24-hour pump drawdown
                       </h3>
-                  <span className="text-[11px] text-muted-foreground leading-snug max-w-md text-left">
-                    Red dots show the reading when the pump starts; blue dots show the reading when the pump stops.
-                    Lines in matching colors connect the respective sequences for easier comparison.
-                  </span>
+                      <span className="text-[11px] text-muted-foreground leading-snug max-w-md text-left">
+                        Red dots show the reading when the pump starts; blue dots show the reading when the pump stops.
+                        Lines in matching colors connect the respective sequences for easier comparison.
+                      </span>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-center">
@@ -208,17 +208,18 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
                       </div>
                     </div>
                   </div>
-                <div className="w-full">
+                  <div className="w-full">
                     {has24hChartData ? (
                       <PumpDrawdownChart rows={chartRows24h} segments={pumpSegments24h} />
                     ) : (
-                    <div className="flex h-full min-h-[14rem] items-center justify-center rounded-lg border border-dashed border-border bg-muted/10 px-4 text-center text-sm text-muted-foreground">
-                      No depth readings in the last 24 hours. Data appears only while the pump is powered on.
-                    </div>
-                  )}
-                </div>
-                <div className="mt-4">
-                  <PumpRunSummaryTable segments={pumpSegments24h} />
+                      <div className="flex h-full min-h-[14rem] items-center justify-center rounded-lg border border-dashed border-border bg-muted/10 px-4 text-center text-sm text-muted-foreground">
+                        No depth readings in the last 24 hours. Data appears only while the pump is powered on.
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-4">
+                    <PumpRunSummaryTable segments={pumpSegments24h} />
+                  </div>
                 </div>
                 {validationNotes.length > 0 && (
                   <div className="mt-3 rounded-lg border border-lime-500/40 bg-lime-50/80 p-3 text-[11px] text-lime-800">
@@ -235,8 +236,6 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
                     </p>
                   </div>
                 )}
-              </div>
-
                 <div className="jal-card">
                   <h3 className="font-semibold text-sm text-foreground mb-3">Sensor Metadata</h3>
                   <div className="grid grid-cols-2 gap-3 text-sm">

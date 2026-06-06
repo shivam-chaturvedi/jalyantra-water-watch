@@ -294,6 +294,8 @@ export interface KPIStats {
   criticalPercentage: number;
   fastestDecliningDistrict: string;
   fastestDeclineRate: number;
+  totalReadings: number;
+  totalWaterMonitored: number;
 }
 
 export interface DistrictHistoryPoint {
@@ -528,7 +530,25 @@ export function transformFirebaseReadings(raw: FirebaseReadings): SensorReading[
         .map(({ leafKey, entry }) => {
           const en = entry as FirebaseReadingEntry;
           const timestamp = readingInstantMs(en, leafKey);
-          if (en.depth == null || en.lat == null || en.long == null) return null;
+          const raw = entry as Record<string, unknown>;
+          const lat =
+            typeof en.lat === 'number'
+              ? en.lat
+              : typeof raw.lat === 'number'
+                ? (raw.lat as number)
+                : null;
+          const long =
+            typeof en.long === 'number'
+              ? en.long
+              : typeof raw.long === 'number'
+                ? (raw.long as number)
+                : typeof raw.lng === 'number'
+                  ? (raw.lng as number)
+                  : typeof raw.lon === 'number'
+                    ? (raw.lon as number)
+                    : null;
+
+          if (en.depth == null || lat == null || long == null) return null;
 
           const collectedDateTime = en.collectedDateTime?.trim();
           const rtdbExport = rtdbReadingToExportRow(leafKey, entry);
@@ -551,8 +571,8 @@ export function transformFirebaseReadings(raw: FirebaseReadings): SensorReading[
             collectedDate: en.collectedDate || new Date(timestamp).toISOString().split('T')[0],
             ...(collectedDateTime ? { collectedDateTime } : {}),
             timestamp,
-            lat: en.lat,
-            long: en.long,
+            lat,
+            long,
             deviceId: en.deviceId || batchKey,
             district: en.district,
             ...(deviceOnlineSince ? { deviceOnlineSince } : {}),
@@ -732,5 +752,10 @@ export function calculateKPIStats(readings: SensorReading[], districts: District
     criticalPercentage,
     fastestDecliningDistrict: fastestDeclining?.name || 'N/A',
     fastestDeclineRate: fastestDeclining ? Math.abs(fastestDeclining.change30Days) : 0,
+    totalReadings: readings.reduce((sum, reading) => sum + reading.history.length, 0),
+    totalWaterMonitored: readings.reduce((sum, reading) => {
+      const depths = reading.history.length ? reading.history : [{ depth: reading.depth }];
+      return sum + depths.reduce((innerSum, point) => innerSum + point.depth, 0);
+    }, 0),
   };
 }

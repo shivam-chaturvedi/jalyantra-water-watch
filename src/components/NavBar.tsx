@@ -1,6 +1,8 @@
 import { RefreshCw, Download, Radio } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import GoogleTranslateDropdown from '@/components/GoogleTranslate';
 import {
   Select,
   SelectContent,
@@ -8,18 +10,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
-import GoogleTranslateDropdown from '@/components/GoogleTranslate';
 
 interface NavBarProps {
-  selectedLocation: string;
-  locationOptions: string[];
-  selectedDate: string;
-  dateOptions: string[];
+  selectedDistrict: string;
+  selectedWell: string;
+  districtOptions: string[];
+  wellOptions: string[];
   isLive: boolean;
   lastUpdated: Date | null;
   onLocationChange: (location: string) => void;
-  onDateChange: (date: string) => void;
+  onWellChange: (well: string) => void;
   onLiveToggle: (live: boolean) => void;
   onRefresh: () => void;
   onExport?: () => void;
@@ -27,14 +27,14 @@ interface NavBarProps {
 }
 
 export function NavBar({
-  selectedLocation,
-  locationOptions,
-  selectedDate,
-  dateOptions,
+  selectedDistrict,
+  selectedWell,
+  districtOptions,
+  wellOptions,
   isLive,
   lastUpdated,
   onLocationChange,
-  onDateChange,
+  onWellChange,
   onLiveToggle,
   onRefresh,
   onExport,
@@ -80,16 +80,16 @@ export function NavBar({
         <div className="flex flex-wrap items-center gap-2">
 
           {/* Location Selector */}
-          <Select value={selectedLocation} onValueChange={onLocationChange}>
+          <Select value={selectedDistrict} onValueChange={onLocationChange}>
             <SelectTrigger
-              className="h-8 text-xs font-medium border-[#e2e8f0] bg-white rounded-xl"
+              className="h-8 text-xs font-medium border-[#e2e8f0] bg-white rounded-xl text-black"
               style={{ width: '130px', fontFamily: 'Inter, sans-serif' }}
             >
-              <SelectValue placeholder="Location" />
+              <SelectValue placeholder="Choose a District" />
             </SelectTrigger>
             <SelectContent className="rounded-xl">
-              <SelectItem value="all-locations">All Locations</SelectItem>
-              {locationOptions.map((location) => (
+              <SelectItem value="all-locations">All Districts</SelectItem>
+              {districtOptions.map((location) => (
                 <SelectItem key={location} value={location}>
                   {location}
                 </SelectItem>
@@ -97,19 +97,18 @@ export function NavBar({
             </SelectContent>
           </Select>
 
-          {/* Date Selector — hidden on xs, visible sm+ */}
-          <Select value={selectedDate} onValueChange={onDateChange}>
+          <Select value={selectedWell} onValueChange={onWellChange}>
             <SelectTrigger
-              className="h-8 text-xs font-medium border-[#e2e8f0] bg-white rounded-xl hidden sm:flex"
-              style={{ width: '120px', fontFamily: 'Inter, sans-serif' }}
+              className="h-8 text-xs font-medium border-[#e2e8f0] bg-white rounded-xl text-black"
+              style={{ width: '130px', fontFamily: 'Inter, sans-serif' }}
             >
-              <SelectValue placeholder="Date" />
+              <SelectValue placeholder="Choose a Device" />
             </SelectTrigger>
             <SelectContent className="rounded-xl">
-              <SelectItem value="all-dates">All Dates</SelectItem>
-              {dateOptions.map((date) => (
-                <SelectItem key={date} value={date}>
-                  {date}
+              <SelectItem value="all-wells">All Devices</SelectItem>
+              {wellOptions.map((location) => (
+                <SelectItem key={location} value={location}>
+                  {location}
                 </SelectItem>
               ))}
             </SelectContent>

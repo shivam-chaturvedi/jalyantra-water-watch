@@ -89,14 +89,27 @@ export function chartPointLabel(p: SensorHistoryPoint): string {
   return new Date(p.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-/** X-axis tick: include date when the series spans more than ~36h. */
-export function formatChartAxisTime(ms: number, rangeMs: number): string {
+/**
+ * X-axis tick formatting:
+ * - If the extent stays within the same local calendar day: show only time (HH:mm)
+ * - Otherwise: always show day + time (DD Mon HH:mm) for a consistent timeline
+ */
+export function formatChartAxisTime(ms: number, rangeMs: number, extentStartMs?: number): string {
   const d = new Date(ms);
   if (!Number.isFinite(d.getTime())) return '';
-  if (rangeMs > 36 * 60 * 60 * 1000) {
-    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  }
-  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const start = extentStartMs != null ? new Date(extentStartMs) : null;
+  const sameDay =
+    start &&
+    start.getFullYear() === d.getFullYear() &&
+    start.getMonth() === d.getMonth() &&
+    start.getDate() === d.getDate();
+
+  if (sameDay) return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+  // Multi-day or unknown: keep all ticks consistent, include day + time.
+  // `rangeMs` is still passed for compatibility and future tweaks.
+  void rangeMs;
+  return d.toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
 function trailingMovingAverage(values: number[], windowSize: number): number[] {

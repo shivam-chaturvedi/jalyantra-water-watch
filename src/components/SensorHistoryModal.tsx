@@ -136,7 +136,7 @@ export function SensorHistoryModal({ sensor, isOpen, onClose }: SensorHistoryMod
               {activeTab === 'chart' && (
                 <div className="jal-card max-h-[min(42vh,320px)] space-y-2 overflow-y-auto sm:max-h-[45vh]">
                   <p className="px-0.5 text-[11px] leading-snug text-muted-foreground">
-                    Red dots = pump start reading. Blue dots = pump stop reading.
+                    Green dots = pump start reading. Red dots = pump stop reading.
                   </p>
                   <PumpDrawdownChart rows={chartData} segments={pumpSegments} className="h-48 sm:h-56" />
                 </div>

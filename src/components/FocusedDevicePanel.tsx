@@ -81,7 +81,7 @@ export function FocusedDevicePanel({ sensor }: FocusedDevicePanelProps) {
 
       <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-sm text-muted-foreground">
         <p className="font-semibold text-foreground">Alerts / Notifications</p>
-        <p className="text-[11px]">Pending content (Taniya to provide the final copy).</p>
+        <p className="text-[11px]">No alerts at this time. Alerts will appear here when water levels exceed thresholds or pump anomalies are detected.</p>
       </div>
     </div>
   );

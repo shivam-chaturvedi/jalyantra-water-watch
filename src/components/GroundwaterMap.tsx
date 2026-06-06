@@ -9,6 +9,11 @@ import {
   getDepthRiskLevel,
   getRiskColorClass,
 } from '@/lib/data';
+import {
+  filterPointsSince,
+  segmentIntoPumpEvents,
+  buildPumpRunSegments,
+} from '@/lib/pumpEvents';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
@@ -17,11 +22,16 @@ interface GroundwaterMapProps {
   districts: District[];
   onSensorClick?: (sensor: SensorReading) => void;
   onDistrictClick?: (district: District) => void;
+  zoomTarget?: { lat: number; long: number } | null;
 }
 
-// Maharashtra center coordinates
-const MAHARASHTRA_CENTER: [number, number] = [19.7515, 75.7139];
-const DEFAULT_ZOOM = 7;
+// India-focused default view
+const INDIA_CENTER: [number, number] = [22.5, 79.0];
+const DEFAULT_ZOOM = 5.2;
+const INDIA_BOUNDS: L.LatLngBoundsExpression = [
+  [6.0, 68.0],
+  [37.5, 98.5],
+];
 
 // Custom hook to handle map events
 function MapController({
@@ -30,10 +40,14 @@ function MapController({
   const map = useMap();
 
   useEffect(() => {
-    // Fit bounds to show all sensors
+    map.setMaxBounds(INDIA_BOUNDS);
+
+    // Fit bounds to show all sensors, but stay inside India.
     if (sensors.length > 0) {
       const bounds = L.latLngBounds(sensors.map(s => [s.lat, s.long]));
-      map.fitBounds(bounds, { padding: [50, 50] });
+      map.fitBounds(bounds.pad(0.2), { padding: [50, 50], maxZoom: 9 });
+    } else {
+      map.setView(INDIA_CENTER, DEFAULT_ZOOM);
     }
   }, [map, sensors]);
 
@@ -48,7 +62,7 @@ const riskColors = {
   critical: '#c43d3d',
 };
 
-// Create square marker icon
+// Create square marker icon (fallback when no pump-run data)
 function createSquareIcon(color: string, size: number = 12) {
   return L.divIcon({
     className: 'custom-square-marker',
@@ -68,13 +82,48 @@ function createSquareIcon(color: string, size: number = 12) {
   });
 }
 
+const PUMP_START_COLOR = '#22c55e'; // green
+const PUMP_STOP_COLOR = '#ef4444';  // red
+
+/** Two-dot icon with a gradient line: green dot on top (pump start), red dot on bottom (pump stop). */
+function createPumpRunIcon(drawdownM: number) {
+  const lineH = Math.min(40, Math.max(10, Math.round(drawdownM * 6)));
+  const totalH = lineH + 24; // 12 per dot
+  return L.divIcon({
+    className: 'pump-run-marker',
+    html: `
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <div style="width:11px;height:11px;background:${PUMP_START_COLOR};border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.35);"></div>
+        <div style="width:3px;height:${lineH}px;background:linear-gradient(to bottom,${PUMP_START_COLOR},${PUMP_STOP_COLOR});"></div>
+        <div style="width:11px;height:11px;background:${PUMP_STOP_COLOR};border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.35);"></div>
+      </div>
+    `,
+    iconSize: [14, totalH],
+    iconAnchor: [7, totalH / 2],
+  });
+}
+
+/** Determine the most recent pump-run state for a sensor (last 48 h). */
+function getPumpRunInfo(sensor: SensorReading): { hasRun: boolean; drawdownM: number } {
+  const since = Date.now() - 48 * 60 * 60 * 1000;
+  const recent = filterPointsSince(sensor.history, since);
+  if (recent.length < 2) return { hasRun: false, drawdownM: 0 };
+  const events = segmentIntoPumpEvents(recent);
+  const segments = buildPumpRunSegments(events);
+  if (!segments.length) return { hasRun: false, drawdownM: 0 };
+  const maxDrawdown = Math.max(...segments.map((s) => Math.max(0, s.drawdown)));
+  return { hasRun: maxDrawdown > 0.1, drawdownM: maxDrawdown };
+}
+
 export function GroundwaterMap({
   sensors,
   districts,
   onSensorClick,
-  onDistrictClick
+  onDistrictClick,
+  zoomTarget,
 }: GroundwaterMapProps) {
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
+  const [clustered, setClustered] = useState<SensorReading[]>([]);
 
   const raiseMarker = (marker: L.Marker | null) => {
     if (!marker) return;
@@ -105,6 +154,25 @@ export function GroundwaterMap({
     onSensorClick?.(sensor);
   };
 
+  useEffect(() => {
+    const groups = new Map<string, SensorReading[]>();
+    sensors.forEach((sensor) => {
+      const key = `${sensor.lat.toFixed(3)}-${sensor.long.toFixed(3)}`;
+      const group = groups.get(key) ?? [];
+      group.push(sensor);
+      groups.set(key, group);
+    });
+    const merged = Array.from(groups.values()).flatMap((group) => group);
+    setClustered(merged);
+  }, [sensors]);
+
+  useEffect(() => {
+    if (!zoomTarget || !mapInstance) return;
+    mapInstance.setView([zoomTarget.lat, zoomTarget.long], Math.max(mapInstance.getZoom(), 12), {
+      animate: true,
+    });
+  }, [zoomTarget, mapInstance]);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -112,11 +180,15 @@ export function GroundwaterMap({
       className="map-container h-[500px] lg:h-[600px] relative"
     >
         <MapContainer
-          center={MAHARASHTRA_CENTER}
+          center={INDIA_CENTER}
           zoom={DEFAULT_ZOOM}
           className="h-full w-full"
           zoomControl={true}
           whenCreated={setMapInstance}
+          maxBounds={INDIA_BOUNDS}
+          maxBoundsViscosity={1}
+          minZoom={4.5}
+          maxZoom={13}
           style={{ borderRadius: '0.25rem' }}
         >
         <TileLayer
@@ -126,11 +198,14 @@ export function GroundwaterMap({
 
         <MapController sensors={sensors} />
 
-        {/* Sensor Markers - Square Design */}
-        {sensors.map((sensor) => {
+        {/* Sensor Markers */}
+        {clustered.map((sensor) => {
           const risk = getDepthRiskLevel(sensor.depth);
           const color = riskColors[risk];
-          const icon = createSquareIcon(color, 14);
+          const pumpInfo = getPumpRunInfo(sensor);
+          const icon = pumpInfo.hasRun
+            ? createPumpRunIcon(pumpInfo.drawdownM)
+            : createSquareIcon(color, 14);
 
           return (
             <Marker
@@ -198,12 +273,23 @@ export function GroundwaterMap({
             </Marker>
           );
         })}
+
       </MapContainer>
 
-      {/* Map Legend - Professional Squared Design */}
+      {/* Map Legend */}
       <div className="absolute bottom-4 left-4 bg-card/98 backdrop-blur-sm border border-border p-4 shadow-elevated z-10 pointer-events-none" style={{ borderRadius: '0.25rem' }}>
-        <h4 className="text-xs font-semibold text-foreground mb-3 uppercase tracking-wider">Depth Classification</h4>
+        <h4 className="text-xs font-semibold text-foreground mb-3 uppercase tracking-wider">Legend</h4>
         <div className="space-y-2">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Pump activity</p>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ background: PUMP_START_COLOR }} />
+            <span className="text-muted-foreground">Pump <span className="font-medium text-foreground">start</span></span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ background: PUMP_STOP_COLOR }} />
+            <span className="text-muted-foreground">Pump <span className="font-medium text-foreground">stop</span></span>
+          </div>
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mt-2 mb-1">Depth risk (no run data)</p>
           <div className="flex items-center gap-3 text-xs">
             <span className="w-3 h-3 bg-depth-safe" style={{ borderRadius: '2px', transform: 'rotate(45deg)' }} />
             <span className="text-muted-foreground">0-5m <span className="font-medium text-foreground">Safe</span></span>

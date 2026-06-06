@@ -245,7 +245,7 @@ export function getDefaultHomeContent(): HomeContent {
       form: {
         namePlaceholder: 'Your Name',
         organizationPlaceholder: 'Organization',
-        emailPlaceholder: 'support@jalyantra.tech',
+        emailPlaceholder: 'Email',
         interestPlaceholder: 'Interested in…',
         interestOptions: ['Dashboards & alerts', 'Field deployment', 'Validation support'],
         detailsPlaceholder: 'Tell us your district(s), number of borewells, and what outcomes you want to measure.',

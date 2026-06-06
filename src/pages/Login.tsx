@@ -37,36 +37,38 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background px-4 flex items-center justify-center">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-6 rounded-2xl border border-border bg-muted/60 p-6 shadow-lg">
-        <div className="flex justify-start">
-          <Button variant="ghost" size="sm" onClick={() => window.location.assign('/')}>
-            Go back to website
-          </Button>
-        </div>
-        <div className="space-y-2 text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">JALYANTRA</p>
-          <h1 className="text-2xl font-bold text-foreground">Login</h1>
-          <p className="text-sm text-muted-foreground">Sign in with an admin account to access the admin panel.</p>
+    <div className="min-h-screen bg-[#f8fafc] px-4 flex items-center justify-center">
+      <div className="mx-auto flex w-full max-w-md flex-col gap-8 rounded-[32px] border border-teal-100 bg-white p-8 sm:p-10 shadow-2xl shadow-teal-900/5">
+        <div className="flex justify-center">
+          <div className="h-16 w-16 rounded-2xl bg-teal-50 flex items-center justify-center shadow-inner">
+             <img src="/logo.jpeg" alt="JalYantra" className="h-12 w-12 rounded-xl object-cover" />
+          </div>
         </div>
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="space-y-1 text-sm">
-            <label className="font-semibold text-foreground" htmlFor="email">
-              Email
+        <div className="space-y-2 text-center">
+          <p className="text-xs font-bold uppercase tracking-[0.4em] text-teal-600">JalYantra Panel</p>
+          <h1 className="text-3xl font-bold text-[#0f172a]">Admin Login</h1>
+          <p className="text-sm text-slate-500">Welcome back. Enter your credentials to manage the portal.</p>
+        </div>
+
+        <form className="space-y-6" onSubmit={handleSubmit}>
+          <div className="space-y-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-700 ml-1" htmlFor="email">
+              Email Address
             </label>
             <Input
               id="email"
               type="email"
               autoComplete="email"
-              placeholder="admin@example.com"
+              placeholder="admin@jalyantra.tech"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
+              className="h-12 rounded-2xl border-slate-200 focus:border-teal-500 focus:ring-teal-500"
             />
           </div>
 
-          <div className="space-y-1 text-sm">
-            <label className="font-semibold text-foreground" htmlFor="password">
+          <div className="space-y-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-700 ml-1" htmlFor="password">
               Password
             </label>
             <Input
@@ -76,18 +78,33 @@ const LoginPage = () => {
               placeholder="••••••••"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
+              className="h-12 rounded-2xl border-slate-200 focus:border-teal-500 focus:ring-teal-500"
             />
           </div>
 
           {(localError || error) && (
-            <p className="text-sm text-destructive">
-              {localError || error}
-            </p>
+            <div className="rounded-xl bg-red-50 p-3 border border-red-100">
+              <p className="text-xs font-medium text-red-600 text-center">
+                {localError || error}
+              </p>
+            </div>
           )}
 
-          <Button type="submit" className="w-full" disabled={actionLoading}>
-            {actionLoading ? 'Signing in…' : 'Sign in'}
+          <Button 
+            type="submit" 
+            className="h-12 w-full rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-base shadow-lg shadow-teal-600/20 transition-all active:scale-[0.98]" 
+            disabled={actionLoading}
+          >
+            {actionLoading ? 'Verifying...' : 'Sign in to Dashboard'}
           </Button>
+
+          <button 
+            type="button"
+            onClick={() => window.location.assign('/')}
+            className="w-full text-center text-xs font-medium text-slate-400 hover:text-teal-600 transition-colors py-2"
+          >
+            ← Back to public website
+          </button>
         </form>
       </div>
     </div>

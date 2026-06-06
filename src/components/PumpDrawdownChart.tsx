@@ -24,16 +24,16 @@ interface PumpDrawdownChartProps {
   className?: string;
 }
 
-const startColor = '#ef4444';
-const endColor = '#1d4ed8';
+const startColor = '#22c55e';
+const endColor = '#ef4444';
 
 function PumpConnector({ segments }: { segments?: PumpRunSegment[] }) {
   if (!segments || !segments.length) return null;
   return (
     <Customized
       component={(props) => {
-        const xAxis = props.xAxisMap?.[0];
-        const yAxis = props.yAxisMap?.[0];
+        const xAxis = Object.values(props.xAxisMap ?? {})[0];
+        const yAxis = Object.values(props.yAxisMap ?? {})[0];
         if (!xAxis || !yAxis) return null;
         const connectors = segments.map((segment) => {
           const x1 = xAxis.scale(segment.startPoint.timestamp);
@@ -48,9 +48,9 @@ function PumpConnector({ segments }: { segments?: PumpRunSegment[] }) {
               y1={y1}
               x2={x2}
               y2={y2}
-              stroke="hsl(210, 12%, 70%)"
-              strokeWidth={1.5}
-              strokeDasharray="4 2"
+              stroke="rgba(15, 23, 42, 0.28)"
+              strokeWidth={2.5}
+              strokeLinecap="round"
             />
           );
         });
@@ -67,6 +67,7 @@ export function PumpDrawdownChart({
 }: PumpDrawdownChartProps) {
   const rangeMs = chartTimeRangeMs(rows);
   const extent = chartTimeExtentMs(rows);
+  const extentStartMs = extent?.[0];
   const baseDomain = computeDepthYAxisDomain(rows);
   const yTicks = buildDepthYTicks(baseDomain[0], baseDomain[1], 0.1);
   const yDomain = alignDepthDomainToTicks(baseDomain[0], baseDomain[1], yTicks);
@@ -88,7 +89,7 @@ export function PumpDrawdownChart({
             tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }}
             tickLine={false}
             axisLine={false}
-            tickFormatter={(ms: number) => formatChartAxisTime(ms, rangeMs)}
+            tickFormatter={(ms: number) => formatChartAxisTime(ms, rangeMs, extentStartMs)}
           />
           <YAxis
             domain={invertedYDomain}
@@ -127,7 +128,7 @@ export function PumpDrawdownChart({
             stroke={startColor}
             strokeWidth={2}
             dot={{ r: 4.5, stroke: '#fff', strokeWidth: 1.5, fill: startColor }}
-            connectNulls
+            connectNulls={false}
             isAnimationActive={false}
             activeDot={{ r: 5, fill: startColor }}
             name="Pump start reading"
@@ -137,8 +138,8 @@ export function PumpDrawdownChart({
             dataKey="endDepth"
             stroke={endColor}
             strokeWidth={2}
-            dot={{ r: 3.5, stroke: '#fff', strokeWidth: 1.5, fill: endColor }}
-            connectNulls
+            dot={{ r: 4.5, stroke: '#fff', strokeWidth: 1.5, fill: endColor }}
+            connectNulls={false}
             isAnimationActive={false}
             activeDot={{ r: 5, fill: endColor }}
             name="Pump stop reading"
@@ -148,12 +149,12 @@ export function PumpDrawdownChart({
       </ResponsiveContainer>
       <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
         <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: endColor }} aria-hidden />
-          Blue · Pump stop reading
+          <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: startColor }} aria-hidden />
+          Green · Pump start reading
         </span>
         <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: startColor }} aria-hidden />
-          Red · Pump start reading
+          <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: endColor }} aria-hidden />
+          Red · Pump stop reading
         </span>
       </p>
     </div>

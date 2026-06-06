@@ -34,6 +34,17 @@ export type DeploymentRecord = {
   updated_at: string;
 };
 
+export type DeviceMasterData = {
+  device_id: string;
+  well_diameter_m: number | null;
+  well_depth_m: number | null;
+  pump_intake_level_m: number | null;
+  pump_diameter_in: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export async function fetchSiteFlags(): Promise<Record<string, boolean>> {
   const { data, error } = await supabase.from('site_flags').select('key,value');
   if (error) throw error;
@@ -86,7 +97,7 @@ export async function uploadFileToBucket(
   opts?: { altText?: string; folder?: string },
 ): Promise<{ bucket: string; objectPath: string; publicUrl: string }> {
   console.log(`[Storage] Starting upload to ${bucket}...`);
-  const safeName = file.name.replace(/[^\w.\-]+/g, '-');
+  const safeName = file.name.replace(/[^\w.-]+/g, '-');
   const folder = (opts?.folder ?? new Date().toISOString().slice(0, 10)).replace(/\/+/g, '-');
   
   // Robust UUID fallback for older browsers or non-secure contexts
@@ -114,7 +125,7 @@ export async function uploadFileToBucket(
 
 export async function uploadMediaFile(file: File, opts?: { altText?: string }): Promise<MediaAsset> {
   const bucket = 'site-media';
-  const safeName = file.name.replace(/[^\w.\-]+/g, '-');
+  const safeName = file.name.replace(/[^\w.-]+/g, '-');
   const objectPath = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}-${safeName}`;
 
   const { error: uploadError } = await supabase.storage.from(bucket).upload(objectPath, file, {
@@ -184,5 +195,37 @@ export async function setDeployment(slug: string, patch: { title?: string; data?
 
 export async function deleteDeployment(slug: string): Promise<void> {
   const { error } = await supabase.from('deployments').delete().eq('slug', slug);
+  if (error) throw error;
+}
+
+export async function fetchDeviceMasterData(deviceId: string): Promise<DeviceMasterData | null> {
+  const { data, error } = await supabase
+    .from('device_master_data')
+    .select('device_id,well_diameter_m,well_depth_m,pump_intake_level_m,pump_diameter_in,notes,created_at,updated_at')
+    .eq('device_id', deviceId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as DeviceMasterData | null;
+}
+
+export async function upsertDeviceMasterData(patch: {
+  device_id: string;
+  well_diameter_m?: number | null;
+  well_depth_m?: number | null;
+  pump_intake_level_m?: number | null;
+  pump_diameter_in?: number | null;
+  notes?: string | null;
+}): Promise<void> {
+  const { error } = await supabase.from('device_master_data').upsert(
+    {
+      device_id: patch.device_id,
+      ...(patch.well_diameter_m !== undefined ? { well_diameter_m: patch.well_diameter_m } : {}),
+      ...(patch.well_depth_m !== undefined ? { well_depth_m: patch.well_depth_m } : {}),
+      ...(patch.pump_intake_level_m !== undefined ? { pump_intake_level_m: patch.pump_intake_level_m } : {}),
+      ...(patch.pump_diameter_in !== undefined ? { pump_diameter_in: patch.pump_diameter_in } : {}),
+      ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
+    },
+    { onConflict: 'device_id' },
+  );
   if (error) throw error;
 }

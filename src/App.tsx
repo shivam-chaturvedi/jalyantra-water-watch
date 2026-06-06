@@ -9,6 +9,8 @@ import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Admin from "./pages/Admin";
 import Deployments from "./pages/Deployments";
+import Partners from "./pages/Partners";
+import DeploymentDetail from "./pages/DeploymentDetail";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ImageModalProvider } from "./components/ImageModalContext";
 
@@ -25,6 +27,8 @@ const App = () => (
             <Route path="/" element={<Home />} />
             <Route path="/dashboard" element={<Index />} />
             <Route path="/deployments" element={<Deployments />} />
+            <Route path="/deployments/:slug" element={<DeploymentDetail />} />
+            <Route path="/partners" element={<Partners />} />
             <Route path="/login" element={<Login />} />
             <Route
               path="/admin"
@@ -43,4 +47,3 @@ const App = () => (
 );
 
 export default App;
-

@@ -10,13 +10,20 @@ import { useGroundwaterData } from '@/hooks/useGroundwaterData';
 import { SensorReading, District, Alert, sensorsDashboardExportRows } from '@/lib/data';
 import { downloadDataAsCsv } from '@/lib/csv';
 import { SensorHistoryModal } from '@/components/SensorHistoryModal';
-import { FocusedDevicePanel } from '@/components/FocusedDevicePanel';
 import { motion } from 'framer-motion';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
 
 const LOCATION_ALL_KEY = 'all-locations';
-const DATE_ALL_KEY = 'all-dates';
-const FOCUS_DEVICE_IDENTIFIERS = ['Device 05', 'Nagpur 05'];
-
+const WELL_ALL_KEY = 'all-wells';
 const Index = () => {
   const {
     sensors,
@@ -27,7 +34,6 @@ const Index = () => {
     isLive,
     lastUpdated,
     availableLocations,
-    availableDates,
     setIsLive,
     refreshData,
   } = useGroundwaterData();
@@ -38,23 +44,22 @@ const Index = () => {
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
   const [historySensor, setHistorySensor] = useState<SensorReading | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [selectedLocation, setSelectedLocation] = useState<string>(LOCATION_ALL_KEY);
-  const [selectedDate, setSelectedDate] = useState<string>(DATE_ALL_KEY);
+  const [selectedDistrictName, setSelectedDistrictName] = useState<string>(LOCATION_ALL_KEY);
+  const [selectedWell, setSelectedWell] = useState<string>(WELL_ALL_KEY);
   const mapSectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (selectedLocation === LOCATION_ALL_KEY) return;
-    if (!availableLocations.includes(selectedLocation)) {
-      setSelectedLocation(LOCATION_ALL_KEY);
-    }
-  }, [availableLocations, selectedLocation]);
+    if (selectedDistrictName === LOCATION_ALL_KEY) return;
+    if (!availableLocations.includes(selectedDistrictName)) setSelectedDistrictName(LOCATION_ALL_KEY);
+  }, [availableLocations, selectedDistrictName]);
 
   useEffect(() => {
-    if (selectedDate === DATE_ALL_KEY) return;
-    if (!availableDates.includes(selectedDate)) {
-      setSelectedDate(DATE_ALL_KEY);
-    }
-  }, [availableDates, selectedDate]);
+    if (selectedWell === WELL_ALL_KEY) return;
+    const sensor = sensors.find((item) => item.deviceId === selectedWell);
+    if (!sensor) return;
+    setSelectedSensor(sensor);
+    setIsSensorModalOpen(true);
+  }, [sensors, selectedWell]);
 
   const handleSensorClick = (sensor: SensorReading) => {
     setSelectedSensor(sensor);
@@ -71,29 +76,26 @@ const Index = () => {
     setIsDistrictPanelOpen(true);
   };
 
-  const locationLabel = selectedLocation === LOCATION_ALL_KEY ? 'All Locations' : selectedLocation;
+  const locationLabel = selectedDistrictName === LOCATION_ALL_KEY ? 'All Districts' : selectedDistrictName;
 
   const handleAlertClick = (alert: Alert) => {
     // Find the district associated with the alert
     const district = districts.find(d => d.name === alert.district);
     if (district) {
-      setSelectedLocation(alert.district);
+      setSelectedDistrictName(alert.district);
       handleDistrictClick(district);
     }
   };
 
-  const locationFilter = selectedLocation === LOCATION_ALL_KEY ? null : selectedLocation;
-  const dateFilter = selectedDate === DATE_ALL_KEY ? null : selectedDate;
-
+  const locationFilter = selectedDistrictName === LOCATION_ALL_KEY ? null : selectedDistrictName;
+  const wellFilter = selectedWell === WELL_ALL_KEY ? null : selectedWell;
   const filteredSensors = useMemo(() => {
     return sensors.filter((sensor) => {
       const matchesLocation = locationFilter ? sensor.district === locationFilter : true;
-      const matchesDate = dateFilter
-        ? sensor.history.some((point) => point.collectedDate === dateFilter)
-        : true;
-      return matchesLocation && matchesDate;
+      const matchesWell = wellFilter ? sensor.deviceId === wellFilter : true;
+      return matchesLocation && matchesWell;
     });
-  }, [sensors, locationFilter, dateFilter]);
+  }, [sensors, locationFilter, wellFilter]);
 
   const filteredDistricts = useMemo(() => {
     if (!locationFilter) return districts;
@@ -106,12 +108,46 @@ const Index = () => {
   }, [alerts, locationFilter]);
 
   const handleViewAllSensors = useCallback(() => {
-    setSelectedLocation(LOCATION_ALL_KEY);
-    setSelectedDate(DATE_ALL_KEY);
+    setSelectedDistrictName(LOCATION_ALL_KEY);
+    setSelectedWell(WELL_ALL_KEY);
     setSelectedDistrict(null);
     setIsDistrictPanelOpen(false);
     mapSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
+
+  const wellRows = useMemo(() => {
+    return filteredSensors.slice(0, 8).map((sensor) => ({
+      well: sensor.deviceId,
+      village: sensor.district,
+      district: sensor.district,
+      health: sensor.depth > 20 ? 'Critical' : sensor.depth > 10 ? 'Stressed' : 'Healthy',
+      trend: `${sensor.depth.toFixed(1)}m`,
+      waterLeft: `${Math.max(1, Math.round(30 - sensor.depth))} days`,
+      device: sensor.status === 'active' ? 'Active' : 'Inactive',
+    }));
+  }, [filteredSensors]);
+
+  // Build time-series chart data: last 14 unique dates, one value per sensor
+  const depthTrendData = useMemo(() => {
+    const dateSet = new Set<string>();
+    filteredSensors.forEach((s) => {
+      s.history.forEach((p) => { if (p.collectedDate) dateSet.add(p.collectedDate); });
+    });
+    const dates = Array.from(dateSet).sort().slice(-14);
+    const displaySensors = filteredSensors.slice(0, 5);
+    return dates.map((date) => {
+      const row: Record<string, string | number> = { date };
+      displaySensors.forEach((s) => {
+        const pts = s.history.filter((p) => p.collectedDate === date);
+        if (pts.length) {
+          row[s.deviceId] = Math.round((pts.reduce((sum, p) => sum + p.depth, 0) / pts.length) * 10) / 10;
+        }
+      });
+      return row;
+    });
+  }, [filteredSensors]);
+
+  const chartColors = ['#0f766e', '#0ea5e9', '#f59e0b', '#ef4444', '#8b5cf6'];
 
   const handleExportAllSensors = useCallback(() => {
     if (!filteredSensors.length) return;
@@ -119,39 +155,25 @@ const Index = () => {
     downloadDataAsCsv('jalyantra-sensor-readings.csv', sensorsDashboardExportRows(filteredSensors));
   }, [filteredSensors]);
 
-  const focusSensor = useMemo(() => {
-    if (!sensors.length) return null;
-    return (
-      sensors.find((sensor) =>
-        FOCUS_DEVICE_IDENTIFIERS.some(
-          (id) =>
-            sensor.deviceId === id ||
-            sensor.deviceId.toLowerCase().includes(id.toLowerCase()) ||
-            sensor.district.toLowerCase().includes('nagpur'),
-        ),
-      ) ?? sensors[0]
-    );
-  }, [sensors]);
-
   return (
     <>
       <div className="h-[32px] w-full bg-background" aria-hidden="true" />
       <div className="min-h-screen bg-background">
         {/* Navigation Bar */}
         <NavBar
-          selectedLocation={selectedLocation}
-          locationOptions={availableLocations}
-          selectedDate={selectedDate}
-          dateOptions={availableDates}
-        isLive={isLive}
-        lastUpdated={lastUpdated}
-        onLocationChange={setSelectedLocation}
-        onDateChange={setSelectedDate}
-        onLiveToggle={setIsLive}
-        onRefresh={refreshData}
-        onExport={handleExportAllSensors}
-        activeSensors={kpiStats?.activeSensors ?? 0}
-      />
+          selectedDistrict={selectedDistrictName}
+          selectedWell={selectedWell}
+          districtOptions={availableLocations}
+          wellOptions={Array.from(new Set(sensors.map((s) => s.deviceId))).sort()}
+          isLive={isLive}
+          lastUpdated={lastUpdated}
+          onLocationChange={setSelectedDistrictName}
+          onWellChange={setSelectedWell}
+          onLiveToggle={setIsLive}
+          onRefresh={refreshData}
+          onExport={handleExportAllSensors}
+          activeSensors={kpiStats?.activeSensors ?? 0}
+        />
 
       {/* Main Content */}
       <main className="container mx-auto px-4 pt-24 pb-8">
@@ -203,94 +225,185 @@ const Index = () => {
             districts={filteredDistricts}
             onSensorClick={handleSensorClick}
             onDistrictClick={handleDistrictClick}
+            zoomTarget={selectedDistrict ? { lat: selectedDistrict.lat, long: selectedDistrict.long } : null}
           />
+        </div>
+        </div>
+
+      {/* Depth Trends Chart */}
+      <div className="jal-card">
+        <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Depth Trends</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Groundwater depth over time — up to 5 devices, last 14 days</p>
+          </div>
+        </div>
+        {depthTrendData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={depthTrendData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 10, fill: '#94a3b8' }}
+                tickFormatter={(v: string) => v.slice(5)}
+              />
+              <YAxis
+                reversed
+                unit="m"
+                tick={{ fontSize: 10, fill: '#94a3b8' }}
+                width={42}
+              />
+              <Tooltip
+                formatter={(value: number, name: string) => [`${value}m`, name]}
+                labelFormatter={(label: string) => `Date: ${label}`}
+              />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              {filteredSensors.slice(0, 5).map((s, i) => (
+                <Line
+                  key={s.deviceId}
+                  type="monotone"
+                  dataKey={s.deviceId}
+                  stroke={chartColors[i % chartColors.length]}
+                  strokeWidth={2}
+                  dot={false}
+                  connectNulls
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex h-[260px] items-center justify-center text-sm text-muted-foreground">
+            No historical data available for the current selection.
+          </div>
+        )}
+      </div>
+
+      <div className="jal-card overflow-x-auto">
+        <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
+          <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Well Insights</h2>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+            Click a well in the dropdown or map for details
+          </span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="professional-table">
+            <thead>
+              <tr>
+                <th>Well Tag/Name</th>
+                <th className="text-center">Village</th>
+                <th className="text-center">District</th>
+                <th className="text-center">Health</th>
+                <th className="text-center">Trend</th>
+                <th className="text-center">Water Left</th>
+                <th className="text-center">Device</th>
+              </tr>
+            </thead>
+            <tbody>
+              {wellRows.map((row) => (
+                <tr
+                  key={row.well}
+                  onClick={() => {
+                    const sensor = sensors.find((item) => item.deviceId === row.well) ?? null;
+                    if (!sensor) return;
+                    setSelectedSensor(sensor);
+                    setIsSensorModalOpen(true);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <td className="font-medium text-foreground">{row.well}</td>
+                  <td className="text-center text-muted-foreground">{row.village}</td>
+                  <td className="text-center text-muted-foreground">{row.district}</td>
+                  <td className="text-center">{row.health}</td>
+                  <td className="text-center font-mono">{row.trend}</td>
+                  <td className="text-center font-mono">{row.waterLeft}</td>
+                  <td className="text-center">{row.device}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {focusSensor && (
-        <div className="jal-card-elevated overflow-hidden">
-          <FocusedDevicePanel sensor={focusSensor} />
+      <div className="jal-card overflow-x-auto">
+        <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
+          <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">District Overview</h2>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+            Click row for details
+          </span>
         </div>
-      )}
-
-        {/* District Quick Overview */}
-        <div className="jal-card">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
-              <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">District Overview</h2>
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                Click row for details
-              </span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="professional-table">
-                <thead>
-                  <tr>
-                    <th>District</th>
-                    <th className="text-center">Avg Depth</th>
-                    <th className="text-center">Sensors</th>
-                    <th className="text-center">30D Change</th>
-                    <th className="text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredDistricts.slice(0, 8).map((district) => (
-                    <tr 
-                      key={district.name}
-                      onClick={() => handleDistrictClick(district)}
-                      className="cursor-pointer"
+        <div className="overflow-x-auto">
+          <table className="professional-table">
+            <thead>
+              <tr>
+                <th>District</th>
+                <th className="text-center">Avg Depth</th>
+                <th className="text-center">Sensors</th>
+                <th className="text-center">30-Day Water Drawn</th>
+                <th className="text-center">30-Day Trend</th>
+                <th className="text-center">Critical Wells</th>
+                <th className="text-center">Sensors</th>
+                <th className="text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredDistricts.slice(0, 8).map((district) => (
+                <tr
+                  key={district.name}
+                  onClick={() => handleDistrictClick(district)}
+                  className="cursor-pointer"
+                >
+                  <td className="font-medium text-foreground">{district.name}</td>
+                  <td className="text-center">
+                    <span
+                      className={`font-bold font-mono ${
+                        district.riskLevel === 'critical'
+                          ? 'text-depth-critical'
+                          : district.riskLevel === 'warning'
+                            ? 'text-depth-warning'
+                            : district.riskLevel === 'moderate'
+                              ? 'text-depth-moderate'
+                              : 'text-depth-safe'
+                      }`}
                     >
-                      <td className="font-medium text-foreground">{district.name}</td>
-                      <td className="text-center">
-                        <span className={`font-bold font-mono ${
-                          district.riskLevel === 'critical' ? 'text-depth-critical' :
-                          district.riskLevel === 'warning' ? 'text-depth-warning' :
-                          district.riskLevel === 'moderate' ? 'text-depth-moderate' :
-                          'text-depth-safe'
-                        }`}>
-                          {district.avgDepth}m
-                        </span>
-                      </td>
-                      <td className="text-center text-muted-foreground font-mono">
-                        {district.sensorCount}
-                      </td>
-                      <td className="text-center">
-                        <span className={`font-mono font-medium ${
-                          district.change30Days < 0 ? 'text-depth-critical' : 'text-depth-safe'
-                        }`}>
-                          {district.change30Days > 0 ? '+' : ''}{district.change30Days}m
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        <span className={`badge-squared text-white text-[10px] ${
-                          district.riskLevel === 'critical' ? 'bg-depth-critical' :
-                          district.riskLevel === 'warning' ? 'bg-depth-warning' :
-                          district.riskLevel === 'moderate' ? 'bg-depth-moderate' :
-                          'bg-depth-safe'
-                        }`}>
-                          {district.riskLevel.toUpperCase()}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </motion.div>
-      </main>
+                      {district.avgDepth}m
+                    </span>
+                  </td>
+                  <td className="text-center text-muted-foreground font-mono">
+                    {district.sensorCount}
+                  </td>
+                  <td className="text-center font-mono">{Math.abs(district.change30Days).toFixed(1)}m</td>
+                  <td className="text-center font-mono">{district.change30Days > 0 ? 'Up' : 'Down'}</td>
+                  <td className="text-center font-mono">{district.criticalPercentage}%</td>
+                  <td className="text-center text-muted-foreground">{district.sensorCount}</td>
+                  <td className="text-center">
+                    <button
+                      className="text-teal-600 font-semibold uppercase text-xs"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleDistrictClick(district);
+                      }}
+                    >
+                      View
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </motion.div>
+  </main>
 
-        {/* Footer */}
-        <Footer />
+      <Footer />
 
-        {/* District Panel (Slide-in) */}
-        <DistrictPanel
-          district={selectedDistrict}
-          isOpen={isDistrictPanelOpen}
-          onClose={() => setIsDistrictPanelOpen(false)}
-          onViewAllSensors={handleViewAllSensors}
-        />
+      <DistrictPanel
+        district={selectedDistrict}
+        isOpen={isDistrictPanelOpen}
+        onClose={() => setIsDistrictPanelOpen(false)}
+        onViewAllSensors={handleViewAllSensors}
+      />
 
-      {/* Sensor Detail Modal */}
       <SensorDetailModal
         sensor={selectedSensor}
         isOpen={isSensorModalOpen}
@@ -300,12 +413,12 @@ const Index = () => {
           handleViewHistory(selectedSensor);
         }}
       />
-        <SensorHistoryModal
-          sensor={historySensor}
-          isOpen={isHistoryOpen}
-          onClose={() => setIsHistoryOpen(false)}
-        />
-      </div>
+      <SensorHistoryModal
+        sensor={historySensor}
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+      />
+    </div>
     </>
   );
 };
