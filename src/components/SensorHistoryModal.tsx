@@ -10,6 +10,7 @@ import {
 } from '@/lib/pumpEvents';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PumpDrawdownChart } from '@/components/PumpDrawdownChart';
 import { downloadDataAsCsv } from '@/lib/csv';
 
@@ -21,6 +22,7 @@ interface SensorHistoryModalProps {
 
 export function SensorHistoryModal({ sensor, isOpen, onClose }: SensorHistoryModalProps) {
   const [activeTab, setActiveTab] = useState<'chart' | 'table'>('chart');
+  const [rangePreset, setRangePreset] = useState<'week' | 'month' | 'months3'>('month');
 
   const tableMeta = useMemo(() => {
     const h = sensor?.history ?? [];
@@ -31,14 +33,33 @@ export function SensorHistoryModal({ sensor, isOpen, onClose }: SensorHistoryMod
     };
   }, [sensor?.history]);
 
+  const latestTimestamp = useMemo(() => {
+    const history = sensor?.history ?? [];
+    const historyMax = history.reduce((max, point) => Math.max(max, point.timestamp), Number.NEGATIVE_INFINITY);
+    const syncMs = new Date(sensor?.lastSync ?? '').getTime();
+    if (Number.isFinite(historyMax) && historyMax > 0) return historyMax;
+    if (Number.isFinite(syncMs)) return syncMs;
+    return Date.now();
+  }, [sensor?.history, sensor?.lastSync]);
+
+  const filteredHistory = useMemo(() => {
+    const history = sensor?.history ?? [];
+    const rangeDays = rangePreset === 'week' ? 7 : rangePreset === 'month' ? 30 : 90;
+    const cutoff = latestTimestamp - rangeDays * 24 * 60 * 60 * 1000;
+    return history
+      .filter((point) => Number.isFinite(point.timestamp) && point.timestamp >= cutoff)
+      .sort((a, b) => a.timestamp - b.timestamp);
+  }, [sensor?.history, latestTimestamp, rangePreset]);
+
   if (!sensor) return null;
 
-  const sortedHistory = [...sensor.history].sort((a, b) => a.timestamp - b.timestamp);
-  const pumpEvents = segmentIntoPumpEvents(sortedHistory);
+  const pumpEvents = segmentIntoPumpEvents(filteredHistory);
   const pumpSegments = buildPumpRunSegments(pumpEvents);
   const lastSyncMs = new Date(sensor.lastSync).getTime();
   const chartData =
-    pumpSegments.length > 0
+    filteredHistory.length === 0
+      ? []
+      : pumpSegments.length > 0
       ? pumpRunSegmentsToChartRows(pumpSegments)
       : [
           {
@@ -136,15 +157,39 @@ export function SensorHistoryModal({ sensor, isOpen, onClose }: SensorHistoryMod
               {activeTab === 'chart' && (
                 <div className="jal-card max-h-[min(42vh,320px)] space-y-2 overflow-y-auto sm:max-h-[45vh]">
                   <p className="px-0.5 text-[11px] leading-snug text-muted-foreground">
-                    Green dots = pump start reading. Red dots = pump stop reading.
+                    Green dots = pump start reading. Red dots = pump stop reading. Use the range filter to focus the graph.
                   </p>
-                  <PumpDrawdownChart rows={chartData} segments={pumpSegments} className="h-48 sm:h-56" />
+                  <div className="grid gap-2 sm:grid-cols-[1.3fr_0.7fr]">
+                    <Select
+                      value={rangePreset}
+                      onValueChange={(value) => setRangePreset(value as 'week' | 'month' | 'months3')}
+                    >
+                      <SelectTrigger className="h-9 rounded-lg">
+                        <SelectValue placeholder="Select range" />
+                      </SelectTrigger>
+                      <SelectContent className="z-[70] max-h-[240px] overflow-y-auto" sideOffset={8} collisionPadding={16} align="start">
+                        <SelectItem value="week">Last week</SelectItem>
+                        <SelectItem value="month">Last 1 month</SelectItem>
+                        <SelectItem value="months3">Last 3 months</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-muted/10 px-3 py-2 text-[11px] text-muted-foreground">
+                    Showing {rangePreset === 'week' ? 'last 7 days' : rangePreset === 'month' ? 'last 30 days' : 'last 3 months'} of history.
+                  </div>
+                  {chartData.length > 0 ? (
+                    <PumpDrawdownChart rows={chartData} segments={pumpSegments} className="h-48 sm:h-56" />
+                  ) : (
+                    <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-border bg-muted/10 px-4 text-center text-sm text-muted-foreground sm:h-56">
+                      No readings were captured for the selected range.
+                    </div>
+                  )}
                 </div>
               )}
 
               {activeTab === 'table' && (
                 <div className="jal-card max-h-[min(50vh,360px)] overflow-y-auto sm:max-h-[50vh]">
-                  {sensor.history.length > 0 ? (
+                  {filteredHistory.length > 0 ? (
                     <table className="w-full border-collapse text-left text-[11px] sm:text-xs">
                       <thead>
                         <tr className="border-b border-border text-muted-foreground">
@@ -156,7 +201,7 @@ export function SensorHistoryModal({ sensor, isOpen, onClose }: SensorHistoryMod
                         </tr>
                       </thead>
                       <tbody>
-                        {sensor.history
+                        {filteredHistory
                           .slice()
                           .reverse()
                           .map((point) => (
@@ -183,7 +228,7 @@ export function SensorHistoryModal({ sensor, isOpen, onClose }: SensorHistoryMod
                       </tbody>
                     </table>
                   ) : (
-                    <p className="text-sm text-muted-foreground">No history yet.</p>
+                    <p className="text-sm text-muted-foreground">No history yet for the selected range.</p>
                   )}
                 </div>
               )}

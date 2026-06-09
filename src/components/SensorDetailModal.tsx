@@ -172,8 +172,8 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
                         24-hour pump drawdown
                       </h3>
                       <span className="text-[11px] text-muted-foreground leading-snug max-w-md text-left">
-                        Red dots show the reading when the pump starts; blue dots show the reading when the pump stops.
-                        Lines in matching colors connect the respective sequences for easier comparison.
+                        Green dots show the reading when the pump starts; red dots show the reading when the pump stops.
+                        A connector line links each start and stop pair so one pump run is easy to read.
                       </span>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">

@@ -1,3 +1,4 @@
+import { MouseEvent, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
@@ -11,6 +12,11 @@ const NAV_ITEMS = [
 
 export function SiteMenu({ className }: { className?: string }) {
   const location = useLocation();
+  const handleHashLink = useCallback((event: MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (!href.includes('#')) return;
+    event.preventDefault();
+    window.location.assign(href);
+  }, []);
 
   return (
     <nav className={cn('flex flex-wrap items-center gap-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground', className)}>
@@ -22,6 +28,7 @@ export function SiteMenu({ className }: { className?: string }) {
           <Link
             key={item.href}
             to={item.href}
+            onClick={(event) => handleHashLink(event, item.href)}
             className={cn(
               'transition-colors hover:text-teal-600',
               active && 'text-teal-700',

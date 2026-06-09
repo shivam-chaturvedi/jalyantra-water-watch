@@ -162,11 +162,11 @@ export function DistrictPanel({ district, isOpen, onClose, onViewAllSensors }: D
 
               {/* Depth Trend Chart */}
               <div className="jal-card">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="font-semibold text-sm text-foreground">Depth Trend</h3>
-                    <p className="text-xs text-muted-foreground">Aggregated from sensor history</p>
-                  </div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-semibold text-sm text-foreground">Depth Trend</h3>
+                      <p className="text-xs text-muted-foreground">Aggregated from sensor history; the X-axis uses reading dates from the selected district</p>
+                    </div>
                   <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
                     {trendData.length} data points
                   </span>
@@ -199,8 +199,8 @@ export function DistrictPanel({ district, isOpen, onClose, onViewAllSensors }: D
                         tickLine={false}
                         axisLine={false}
                         domain={['auto', 'auto']}
-                        unit="m"
-                        width={36}
+                        width={54}
+                        tickFormatter={(v: number) => `${Number(v).toFixed(1)}m`}
                       />
                       <Tooltip
                         contentStyle={{

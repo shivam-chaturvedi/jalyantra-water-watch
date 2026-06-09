@@ -593,6 +593,7 @@ export function transformFirebaseReadings(raw: FirebaseReadings): SensorReading[
 
 export function calculateDistrictStats(readings: SensorReading[]): District[] {
   const districtMap = new Map<string, SensorReading[]>();
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
   readings.forEach((reading) => {
     const districtSensors = districtMap.get(reading.district) ?? [];
@@ -606,18 +607,37 @@ export function calculateDistrictStats(readings: SensorReading[]): District[] {
     const avgDepth =
       districtReadings.reduce((sum, reading) => sum + reading.depth, 0) / districtReadings.length;
 
-    const earliestAvg =
-      districtReadings.reduce((sum, reading) => sum + (reading.history[0]?.depth ?? reading.depth), 0) /
-      districtReadings.length;
+    const latestTimestamp = Math.max(
+      ...districtReadings.flatMap((reading) => reading.history.map((point) => point.timestamp)),
+      ...districtReadings.map((reading) => new Date(reading.lastSync).getTime()).filter((t) => Number.isFinite(t)),
+    );
+    const cutoffMs = Number.isFinite(latestTimestamp) ? latestTimestamp - THIRTY_DAYS_MS : Date.now() - THIRTY_DAYS_MS;
+
+    const recentPoints = districtReadings.flatMap((reading) =>
+      reading.history.filter((point) => Number.isFinite(point.timestamp) && point.timestamp >= cutoffMs),
+    );
+    const baselinePoints = districtReadings.flatMap((reading) =>
+      reading.history.filter((point) => Number.isFinite(point.timestamp) && point.timestamp < cutoffMs),
+    );
+
+    const recentAvg =
+      recentPoints.length > 0
+        ? recentPoints.reduce((sum, point) => sum + point.depth, 0) / recentPoints.length
+        : avgDepth;
+    const baselineAvg =
+      baselinePoints.length > 0
+        ? baselinePoints.reduce((sum, point) => sum + point.depth, 0) / baselinePoints.length
+        : recentAvg;
 
     const criticalCount = districtReadings.filter((reading) => reading.depth > 20).length;
 
-    const change30Days = Math.round((avgDepth - earliestAvg) * 10) / 10;
+    const change30Days = Math.round((recentAvg - baselineAvg) * 10) / 10;
     const criticalPercentage = Math.round((criticalCount / districtReadings.length) * 100);
 
     const timeline = new Map<string, { sum: number; count: number }>();
     districtReadings.forEach((reading) => {
       reading.history.forEach((point) => {
+        if (!Number.isFinite(point.timestamp) || point.timestamp < cutoffMs) return;
         const dateKey = point.collectedDate || new Date(point.timestamp).toISOString().split('T')[0];
         const entry = timeline.get(dateKey) ?? { sum: 0, count: 0 };
         entry.sum += point.depth;

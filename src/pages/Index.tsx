@@ -146,6 +146,21 @@ const Index = () => {
       return row;
     });
   }, [filteredSensors]);
+  const depthTrendMax = useMemo(() => {
+    const depths = depthTrendData.flatMap((row) =>
+      Object.entries(row)
+        .filter(([key, value]) => key !== 'date' && typeof value === 'number' && Number.isFinite(value))
+        .map(([, value]) => value as number),
+    );
+    return depths.length ? Math.max(...depths) : 16;
+  }, [depthTrendData]);
+  const depthTrendUpperBound = Math.max(16, Math.ceil(depthTrendMax / 2) * 2);
+  const depthTrendTicks = useMemo(() => {
+    const ticks: number[] = [];
+    for (let value = 2; value <= depthTrendUpperBound; value += 2) ticks.push(value);
+    if (ticks.length === 0) ticks.push(2, depthTrendUpperBound);
+    return ticks;
+  }, [depthTrendUpperBound]);
 
   const chartColors = ['#0f766e', '#0ea5e9', '#f59e0b', '#ef4444', '#8b5cf6'];
 
@@ -235,28 +250,29 @@ const Index = () => {
         <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
           <div>
             <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Depth Trends</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Groundwater depth over time — up to 5 devices, last 14 days</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Groundwater depth over time — up to 5 devices, last 14 days, with a 2m baseline at the bottom of the axis</p>
           </div>
         </div>
         {depthTrendData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={depthTrendData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-              <XAxis
-                dataKey="date"
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={depthTrendData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+                  <XAxis
+                    dataKey="date"
                 tick={{ fontSize: 10, fill: '#94a3b8' }}
                 tickFormatter={(v: string) => v.slice(5)}
-              />
-              <YAxis
-                reversed
-                unit="m"
-                tick={{ fontSize: 10, fill: '#94a3b8' }}
-                width={42}
-              />
-              <Tooltip
-                formatter={(value: number, name: string) => [`${value}m`, name]}
-                labelFormatter={(label: string) => `Date: ${label}`}
-              />
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: '#94a3b8' }}
+                    width={46}
+                    domain={[2, depthTrendUpperBound]}
+                    ticks={depthTrendTicks}
+                    tickFormatter={(v: number) => `${v}m`}
+                  />
+                  <Tooltip
+                    formatter={(value: number, name: string) => [`${value}m`, name]}
+                    labelFormatter={(label: string) => `Date: ${label}`}
+                  />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               {filteredSensors.slice(0, 5).map((s, i) => (
                 <Line
@@ -341,7 +357,6 @@ const Index = () => {
                 <th className="text-center">30-Day Water Drawn</th>
                 <th className="text-center">30-Day Trend</th>
                 <th className="text-center">Critical Wells</th>
-                <th className="text-center">Sensors</th>
                 <th className="text-center">Action</th>
               </tr>
             </thead>
@@ -374,7 +389,6 @@ const Index = () => {
                   <td className="text-center font-mono">{Math.abs(district.change30Days).toFixed(1)}m</td>
                   <td className="text-center font-mono">{district.change30Days > 0 ? 'Up' : 'Down'}</td>
                   <td className="text-center font-mono">{district.criticalPercentage}%</td>
-                  <td className="text-center text-muted-foreground">{district.sensorCount}</td>
                   <td className="text-center">
                     <button
                       className="text-teal-600 font-semibold uppercase text-xs"

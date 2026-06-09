@@ -111,7 +111,6 @@ export default function PartnersPage() {
             <div className="grid gap-6 lg:grid-cols-2">
               <section className="rounded-[28px] border border-border bg-muted/20 p-5">
                 <div className="space-y-3">
-                  <p className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">Left Side</p>
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-2xl font-bold text-foreground">Krushivikas Foundation</h3>
                     <a
@@ -137,39 +136,38 @@ export default function PartnersPage() {
               </section>
 
               <section className="rounded-[28px] border border-border bg-muted/20 p-5">
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">Right Side</p>
-                <div className="mt-4 overflow-hidden rounded-[24px] border border-border bg-black">
+                <div className="overflow-hidden rounded-[24px] border border-border bg-black">
                   <div className="aspect-video bg-black">
-                    <iframe
-                      title="Krushi Vikas interview video"
-                      src="about:blank"
-                      className="h-full w-full"
-                      allow="autoplay; encrypted-media"
-                      allowFullScreen
-                    />
+                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-teal-950 via-slate-950 to-black p-6 text-center">
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.35em] text-teal-200">Interview placeholder</p>
+                        <p className="text-sm text-white/70">Replace with the interview video asset when it is ready.</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <p className="mt-3 text-sm text-muted-foreground">An interview video, with the NGO and community.</p>
               </section>
             </div>
 
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
               <section className="rounded-[28px] border border-border bg-muted/20 p-5">
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">Left Side</p>
-                <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   {krushivikasPhotos.map((src) => (
-                    <img
+                    <div
                       key={src}
-                      src={src}
-                      alt="Krushi Vikas engagement"
-                      className="aspect-[4/3] w-full rounded-[18px] object-cover"
-                    />
+                      className="aspect-[4/3] overflow-hidden rounded-[18px] border border-border bg-white"
+                    >
+                      <img
+                        src="/placeholder.svg"
+                        alt="Placeholder visual"
+                        className="h-full w-full object-cover opacity-90"
+                      />
+                    </div>
                   ))}
                 </div>
               </section>
 
               <section className="rounded-[28px] border border-border bg-muted/20 p-5">
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">Right Side</p>
                 <div className="space-y-4">
                   <h3 className="text-2xl font-bold text-foreground">Engagement with JalYantra</h3>
                   <p className="text-sm leading-relaxed text-muted-foreground">
@@ -188,7 +186,7 @@ export default function PartnersPage() {
           </CollapsibleContent>
         </Collapsible>
 
-        <section className="rounded-[32px] border border-border bg-card/90 p-5 shadow-sm sm:p-6">
+        <section className="hidden rounded-[32px] border border-border bg-card/90 p-5 shadow-sm sm:p-6" aria-hidden="true">
           <div className="mb-5">
             <p className="text-xs font-semibold uppercase tracking-[0.35em] text-teal-700">Testimonial cards</p>
             <h2 className="text-2xl font-bold text-foreground">Voices from collaboration</h2>

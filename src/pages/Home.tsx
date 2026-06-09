@@ -108,6 +108,7 @@ export default function Home() {
   });
   const isHomeEnabled =
     pagesQuery.data?.find((p) => p.path === "/")?.is_enabled ?? true;
+  const showDeploymentsSection = flagsQuery.data?.show_deployments ?? true;
   const showValidationSection = flagsQuery.data?.show_validation ?? false;
   const showCarouselSection = flagsQuery.data?.show_image_carousel ?? true;
 
@@ -121,13 +122,29 @@ export default function Home() {
   const deploymentsContent = homeContent.deployments;
   const validationContent = homeContent.validation;
   const contactContent = homeContent.contact;
-  const impactMetrics = [
-    { label: "Wells Monitored", value: kpiStats?.totalSensors ?? 0 },
-    { label: "Villages Reached", value: homeContent.dashboard.stats[0]?.value ?? "0" },
-    { label: "Districts Covered", value: homeContent.dashboard.stats[2]?.value ?? "0" },
-    { label: "Total Readings", value: totalReadings },
-    { label: "Total Water Monitored", value: totalWaterMonitored > 0 ? `${(totalWaterMonitored / 1000).toFixed(1)}K m` : "0" },
-  ];
+  const impactMetrics =
+    dashboardContent.impactMetrics.length > 0
+      ? dashboardContent.impactMetrics
+      : [
+          { label: "Wells Monitored", value: String(kpiStats?.totalSensors ?? 0), note: "Connected to the live sensor network" },
+          { label: "Villages Reached", value: String(homeContent.dashboard.stats[0]?.value ?? "0"), note: "Tracked from the current program" },
+          { label: "Districts Covered", value: String(homeContent.dashboard.stats[2]?.value ?? "0"), note: "Geographies represented in the dataset" },
+          { label: "Total Readings", value: String(totalReadings), note: "Historical samples and event points" },
+          { label: "Water Observed", value: totalWaterMonitored > 0 ? `${(totalWaterMonitored / 1000).toFixed(1)}K m` : "0", note: "Approximate cumulative water monitored" },
+        ];
+  const actionableInsights =
+    dashboardContent.actionableInsights.length > 0
+      ? dashboardContent.actionableInsights
+      : [
+          { title: "Estimated Water Drawn", description: "Understand how much water is extracted in each pump cycle." },
+          { title: "Days of Water Remaining", description: "Estimate how long the well water lasts at current extraction levels." },
+          { title: "Seasonal Water Extraction Trend", description: "Track how groundwater usage changes across seasons." },
+          { title: "Irrigation Intensity Indicator", description: "Understand whether water usage is above or below normal levels." },
+          { title: "Monsoon Recharge Gain", description: "See how groundwater levels improve after the monsoon." },
+          { title: "Dry Run Risk Alerts", description: "Receive alerts when water levels fall too low for safe pumping and when it becomes safe again." },
+          { title: "Groundwater Recovery Tracking", description: "Discover how quickly wells recover after pumping." },
+          { title: "Seasonal Groundwater Trends", description: "Monitor how groundwater levels rise or fall over time." },
+        ];
 
   const primaryCtaHref = String((hero as any).primaryCtaHref ?? "/dashboard").trim() || "/dashboard";
   const secondaryCtaHref = String((hero as any).secondaryCtaHref ?? "#how-it-works").trim() || "#how-it-works";
@@ -523,6 +540,7 @@ Details: ${contactInfo.details}`,
                 <div key={metric.label} className="rounded-[24px] border border-teal-100 bg-card/80 p-5 shadow-sm">
                   <p className="text-xs uppercase tracking-[0.25em] text-teal-600 font-semibold">{metric.label}</p>
                   <p className="mt-3 text-3xl font-bold text-foreground">{metric.value}</p>
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{metric.note}</p>
                 </div>
               ))}
             </div>
@@ -537,30 +555,68 @@ Details: ${contactInfo.details}`,
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                ["Estimated Water Drawn", "Understand how much water is extracted in each pump cycle"],
-                ["Days of Water Remaining", "Understand how long the well water lasts at current extraction level"],
-                ["Seasonal Water Extraction Trend", "Track how groundwater usage changes across seasons"],
-                ["Irrigation Intensity Indicator", "Understand whether water usage is above or below normal levels"],
-                ["Monsoon Recharge Gain", "See how much groundwater levels improve after the monsoon"],
-                ["Dry Run Risk Alerts", "Receive alerts when water levels fall too low for safe pumping and when it becomes safe again"],
-                ["Groundwater Recovery Tracking", "Discover how quickly wells recover after pumping"],
-                ["Seasonal Groundwater Trends", "Monitor how groundwater levels rise or fall over time"],
-              ].map(([title, description]) => (
-                <div key={title} className="rounded-[22px] border border-teal-100 bg-card/80 p-4 shadow-sm hover:shadow-md hover:border-teal-300 transition-all">
-                  <p className="text-sm font-semibold text-foreground">{title}</p>
-                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{description}</p>
+              {actionableInsights.map((item, index) => (
+                <div
+                  key={item.title}
+                  className={cn(
+                    'rounded-[24px] border p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md',
+                    index % 2 === 0
+                      ? 'border-teal-200 bg-gradient-to-br from-white to-teal-50/60'
+                      : 'border-emerald-100 bg-gradient-to-br from-white to-emerald-50/60',
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-[0.25em] text-teal-600">Insight {index + 1}</p>
+                    <span className="h-2.5 w-2.5 rounded-full bg-teal-500/70" />
+                  </div>
+                  <p className="mt-3 text-sm font-semibold text-foreground">{item.title}</p>
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{item.description}</p>
                 </div>
               ))}
             </div>
           </section>
 
-          <section className="container mx-auto space-y-8 px-4 hidden" aria-hidden="true">
-            <div className="space-y-2">
-              <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">{deploymentsContent.kicker}</p>
-              <h2 className="text-3xl font-bold text-foreground">{deploymentsContent.heading}</h2>
-            </div>
-          </section>
+          {showDeploymentsSection && (
+            <section className="container mx-auto space-y-8 px-4" id="deployments">
+              <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+                <div className="space-y-4 rounded-[32px] border border-teal-100 bg-gradient-to-br from-teal-50 via-white to-emerald-50 p-6 shadow-sm">
+                  <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">{deploymentsContent.kicker}</p>
+                  <h2 className="text-3xl font-bold text-foreground">{deploymentsContent.heading}</h2>
+                  <p className="text-sm leading-relaxed text-muted-foreground">{deploymentsContent.description}</p>
+                  <div className="overflow-hidden rounded-[24px] border border-teal-100 bg-black">
+                    <div className="flex aspect-video items-center justify-center bg-black px-6 text-center">
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold uppercase tracking-[0.35em] text-teal-200">
+                          {deploymentsContent.videoPlaceholder}
+                        </p>
+                        <p className="text-xs text-white/70">{deploymentsContent.videoCaption}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {deploymentsContent.placeholderCards.map((card, index) => (
+                    <div
+                      key={card.title}
+                      className="group rounded-[28px] border border-border bg-card/80 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-teal-600">
+                          {deploymentsContent.showMoreLabel}
+                        </p>
+                        <span className="rounded-full bg-teal-50 px-2.5 py-1 text-[10px] font-semibold text-teal-700">
+                          0{index + 1}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-lg font-semibold text-foreground">{card.title}</p>
+                      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{card.subtitle}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
 
           <section className="container mx-auto space-y-8 px-4 hidden" aria-hidden="true">
             <div className="space-y-2">

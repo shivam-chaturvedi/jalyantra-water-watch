@@ -16,6 +16,8 @@ export type HomeHeroContent = {
 export type HomeInsightsCard = { title: string; description: string; icon?: string };
 export type HomeDashboardStat = { label: string; value: string; note: string };
 export type HomeDashboardAlert = { tone: 'danger' | 'success'; text: string };
+export type HomeImpactMetric = { label: string; value: string; note: string };
+export type HomeActionableInsight = { title: string; description: string };
 
 export type HomeDashboardContent = {
   kicker: string;
@@ -30,6 +32,8 @@ export type HomeDashboardContent = {
   mapImageUrl: string;
   mapChips: string[];
   screenshotsCsv: string;
+  impactMetrics: HomeImpactMetric[];
+  actionableInsights: HomeActionableInsight[];
 };
 
 export type HomeInsightsContent = {
@@ -183,6 +187,47 @@ export function getDefaultHomeContent(): HomeContent {
       mapImageUrl: '/interactive-map.png',
       mapChips: ['📍 Layer: Sensor', '🌐 Layer: Network', '🔍 Drill-down modal'],
       screenshotsCsv: '/1.png, /graph.png',
+      impactMetrics: [
+        { label: 'Wells Monitored', value: '5', note: 'Connected to the live sensor network' },
+        { label: 'Villages Reached', value: '3', note: 'Pilot geographies currently active' },
+        { label: 'Districts Covered', value: '3', note: 'Geographies represented in the dataset' },
+        { label: 'Readings Captured', value: '12K+', note: 'Historical samples and event points' },
+        { label: 'Water Observed', value: '38K m', note: 'Approximate cumulative water monitored' },
+      ],
+      actionableInsights: [
+        {
+          title: 'Estimated Water Drawn',
+          description: 'Understand how much water is extracted in each pump cycle.',
+        },
+        {
+          title: 'Days of Water Remaining',
+          description: 'Estimate how long the well water lasts at current extraction levels.',
+        },
+        {
+          title: 'Seasonal Water Extraction Trend',
+          description: 'Track how groundwater usage changes across seasons.',
+        },
+        {
+          title: 'Irrigation Intensity Indicator',
+          description: 'Understand whether water usage is above or below normal levels.',
+        },
+        {
+          title: 'Monsoon Recharge Gain',
+          description: 'See how groundwater levels improve after the monsoon.',
+        },
+        {
+          title: 'Dry Run Risk Alerts',
+          description: 'Receive alerts when water levels fall too low for safe pumping and when it becomes safe again.',
+        },
+        {
+          title: 'Groundwater Recovery Tracking',
+          description: 'Discover how quickly wells recover after pumping.',
+        },
+        {
+          title: 'Seasonal Groundwater Trends',
+          description: 'Monitor how groundwater levels rise or fall over time.',
+        },
+      ],
     },
     deployments: {
       kicker: 'Field work',
@@ -374,6 +419,8 @@ export function mergeHomeContentWithDefaults(value: unknown): HomeContent {
       stats: arrOr(defaults.dashboard.stats, dashboardOverrides['stats']),
       alerts: arrOr(defaults.dashboard.alerts, dashboardOverrides['alerts']),
       mapChips: arrOr(defaults.dashboard.mapChips, dashboardOverrides['mapChips']),
+      impactMetrics: arrOr(defaults.dashboard.impactMetrics, dashboardOverrides['impactMetrics']),
+      actionableInsights: arrOr(defaults.dashboard.actionableInsights, dashboardOverrides['actionableInsights']),
     } as HomeDashboardContent,
     deployments: {
       ...defaults.deployments,

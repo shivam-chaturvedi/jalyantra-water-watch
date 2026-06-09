@@ -260,6 +260,7 @@ export default function DeploymentsPage() {
     }),
     [deployments],
   );
+  const defaultDeploymentSlug = visibleDeployments.find((record) => record.slug === 'alibaug-raigad')?.slug ?? visibleDeployments[0]?.slug ?? '';
 
   if (pagesQuery.isSuccess && !isEnabled) return <NotFound />;
 
@@ -300,7 +301,7 @@ export default function DeploymentsPage() {
 
         {/* Deployments — one tab per site, full content shown directly */}
         {visibleDeployments.length > 0 && (
-          <Tabs defaultValue={visibleDeployments[0].slug} className="w-full">
+          <Tabs defaultValue={defaultDeploymentSlug} className="w-full">
             <TabsList className="flex flex-wrap h-auto gap-1 rounded-[20px] border border-border bg-muted/40 p-1">
               {visibleDeployments.map((record) => (
                 <TabsTrigger

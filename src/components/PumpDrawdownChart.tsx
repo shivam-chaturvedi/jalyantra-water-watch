@@ -1,6 +1,5 @@
 import {
   CartesianGrid,
-  Customized,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -27,37 +26,23 @@ interface PumpDrawdownChartProps {
 const startColor = '#22c55e';
 const endColor = '#ef4444';
 
-function PumpConnector({ segments }: { segments?: PumpRunSegment[] }) {
-  if (!segments || !segments.length) return null;
-  return (
-    <Customized
-      component={(props) => {
-        const xAxis = Object.values(props.xAxisMap ?? {})[0];
-        const yAxis = Object.values(props.yAxisMap ?? {})[0];
-        if (!xAxis || !yAxis) return null;
-        const connectors = segments.map((segment) => {
-          const x1 = xAxis.scale(segment.startPoint.timestamp);
-          const y1 = yAxis.scale(segment.startDepth);
-          const x2 = xAxis.scale(segment.endPoint.timestamp);
-          const y2 = yAxis.scale(segment.endDepth);
-          if ([x1, y1, x2, y2].some((value) => value == null || Number.isNaN(value))) return null;
-          return (
-            <line
-              key={`connector-${segment.runIndex}`}
-              x1={x1}
-              y1={y1}
-              x2={x2}
-              y2={y2}
-              stroke="rgba(15, 23, 42, 0.28)"
-              strokeWidth={2.5}
-              strokeLinecap="round"
-            />
-          );
-        });
-        return <>{connectors}</>;
-      }}
-    />
-  );
+function PumpRunDot({
+  cx,
+  cy,
+  payload,
+}: {
+  cx?: number;
+  cy?: number;
+  payload?: {
+    isRunStart?: boolean;
+    isRunEnd?: boolean;
+  };
+}) {
+  if (cx == null || cy == null || Number.isNaN(cx) || Number.isNaN(cy)) return null;
+  const isStart = Boolean(payload?.isRunStart);
+  const isEnd = Boolean(payload?.isRunEnd);
+  const fill = isStart ? startColor : isEnd ? endColor : '#64748b';
+  return <circle cx={cx} cy={cy} r={5} fill={fill} stroke="#fff" strokeWidth={1.5} />;
 }
 
 export function PumpDrawdownChart({
@@ -79,7 +64,7 @@ export function PumpDrawdownChart({
   return (
     <div className={`w-full overflow-hidden ${className}`}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={rows} margin={{ top: 8, right: 12, left: 2, bottom: 4 }}>
+        <LineChart data={rows} margin={{ top: 8, right: 12, left: 18, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
           <XAxis
             type="number"
@@ -89,6 +74,7 @@ export function PumpDrawdownChart({
             tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }}
             tickLine={false}
             axisLine={false}
+            tickMargin={10}
             tickFormatter={(ms: number) => formatChartAxisTime(ms, rangeMs, extentStartMs)}
           />
           <YAxis
@@ -124,27 +110,15 @@ export function PumpDrawdownChart({
           />
           <Line
             type="linear"
-            dataKey="startDepth"
-            stroke={startColor}
-            strokeWidth={2}
-            dot={{ r: 4.5, stroke: '#fff', strokeWidth: 1.5, fill: startColor }}
+            dataKey="depth"
+            stroke="rgba(15, 23, 42, 0.32)"
+            strokeWidth={2.5}
+            dot={<PumpRunDot />}
             connectNulls={false}
             isAnimationActive={false}
-            activeDot={{ r: 5, fill: startColor }}
-            name="Pump start reading"
+            activeDot={<PumpRunDot />}
+            name="Pump run"
           />
-          <Line
-            type="linear"
-            dataKey="endDepth"
-            stroke={endColor}
-            strokeWidth={2}
-            dot={{ r: 4.5, stroke: '#fff', strokeWidth: 1.5, fill: endColor }}
-            connectNulls={false}
-            isAnimationActive={false}
-            activeDot={{ r: 5, fill: endColor }}
-            name="Pump stop reading"
-          />
-          <PumpConnector segments={segments} />
         </LineChart>
       </ResponsiveContainer>
       <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">

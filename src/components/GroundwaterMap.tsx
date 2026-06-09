@@ -9,11 +9,6 @@ import {
   getDepthRiskLevel,
   getRiskColorClass,
 } from '@/lib/data';
-import {
-  filterPointsSince,
-  segmentIntoPumpEvents,
-  buildPumpRunSegments,
-} from '@/lib/pumpEvents';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
@@ -62,10 +57,10 @@ const riskColors = {
   critical: '#c43d3d',
 };
 
-// Create square marker icon (fallback when no pump-run data)
-function createSquareIcon(color: string, size: number = 12) {
+// Simple location marker used on the map for each sensor.
+function createLocationIcon(color: string, size: number = 14) {
   return L.divIcon({
-    className: 'custom-square-marker',
+    className: 'custom-location-marker',
     html: `
       <div style="
         width: ${size}px;
@@ -73,46 +68,12 @@ function createSquareIcon(color: string, size: number = 12) {
         background-color: ${color};
         border: 2px solid white;
         box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-        border-radius: 2px;
-        transform: rotate(45deg);
+        border-radius: 9999px;
       "></div>
     `,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
-}
-
-const PUMP_START_COLOR = '#22c55e'; // green
-const PUMP_STOP_COLOR = '#ef4444';  // red
-
-/** Two-dot icon with a gradient line: green dot on top (pump start), red dot on bottom (pump stop). */
-function createPumpRunIcon(drawdownM: number) {
-  const lineH = Math.min(40, Math.max(10, Math.round(drawdownM * 6)));
-  const totalH = lineH + 24; // 12 per dot
-  return L.divIcon({
-    className: 'pump-run-marker',
-    html: `
-      <div style="display:flex;flex-direction:column;align-items:center;">
-        <div style="width:11px;height:11px;background:${PUMP_START_COLOR};border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.35);"></div>
-        <div style="width:3px;height:${lineH}px;background:linear-gradient(to bottom,${PUMP_START_COLOR},${PUMP_STOP_COLOR});"></div>
-        <div style="width:11px;height:11px;background:${PUMP_STOP_COLOR};border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.35);"></div>
-      </div>
-    `,
-    iconSize: [14, totalH],
-    iconAnchor: [7, totalH / 2],
-  });
-}
-
-/** Determine the most recent pump-run state for a sensor (last 48 h). */
-function getPumpRunInfo(sensor: SensorReading): { hasRun: boolean; drawdownM: number } {
-  const since = Date.now() - 48 * 60 * 60 * 1000;
-  const recent = filterPointsSince(sensor.history, since);
-  if (recent.length < 2) return { hasRun: false, drawdownM: 0 };
-  const events = segmentIntoPumpEvents(recent);
-  const segments = buildPumpRunSegments(events);
-  if (!segments.length) return { hasRun: false, drawdownM: 0 };
-  const maxDrawdown = Math.max(...segments.map((s) => Math.max(0, s.drawdown)));
-  return { hasRun: maxDrawdown > 0.1, drawdownM: maxDrawdown };
 }
 
 export function GroundwaterMap({
@@ -202,10 +163,7 @@ export function GroundwaterMap({
         {clustered.map((sensor) => {
           const risk = getDepthRiskLevel(sensor.depth);
           const color = riskColors[risk];
-          const pumpInfo = getPumpRunInfo(sensor);
-          const icon = pumpInfo.hasRun
-            ? createPumpRunIcon(pumpInfo.drawdownM)
-            : createSquareIcon(color, 14);
+          const icon = createLocationIcon(color, 14);
 
           return (
             <Marker
@@ -280,30 +238,21 @@ export function GroundwaterMap({
       <div className="absolute bottom-4 left-4 bg-card/98 backdrop-blur-sm border border-border p-4 shadow-elevated z-10 pointer-events-none" style={{ borderRadius: '0.25rem' }}>
         <h4 className="text-xs font-semibold text-foreground mb-3 uppercase tracking-wider">Legend</h4>
         <div className="space-y-2">
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Pump activity</p>
-          <div className="flex items-center gap-2 text-xs">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ background: PUMP_START_COLOR }} />
-            <span className="text-muted-foreground">Pump <span className="font-medium text-foreground">start</span></span>
-          </div>
-          <div className="flex items-center gap-2 text-xs">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ background: PUMP_STOP_COLOR }} />
-            <span className="text-muted-foreground">Pump <span className="font-medium text-foreground">stop</span></span>
-          </div>
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mt-2 mb-1">Depth risk (no run data)</p>
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Location markers</p>
           <div className="flex items-center gap-3 text-xs">
-            <span className="w-3 h-3 bg-depth-safe" style={{ borderRadius: '2px', transform: 'rotate(45deg)' }} />
+            <span className="w-3 h-3 bg-depth-safe rounded-full" />
             <span className="text-muted-foreground">0-5m <span className="font-medium text-foreground">Safe</span></span>
           </div>
           <div className="flex items-center gap-3 text-xs">
-            <span className="w-3 h-3 bg-depth-moderate" style={{ borderRadius: '2px', transform: 'rotate(45deg)' }} />
+            <span className="w-3 h-3 bg-depth-moderate rounded-full" />
             <span className="text-muted-foreground">5-10m <span className="font-medium text-foreground">Moderate</span></span>
           </div>
           <div className="flex items-center gap-3 text-xs">
-            <span className="w-3 h-3 bg-depth-warning" style={{ borderRadius: '2px', transform: 'rotate(45deg)' }} />
+            <span className="w-3 h-3 bg-depth-warning rounded-full" />
             <span className="text-muted-foreground">10-20m <span className="font-medium text-foreground">Warning</span></span>
           </div>
           <div className="flex items-center gap-3 text-xs">
-            <span className="w-3 h-3 bg-depth-critical" style={{ borderRadius: '2px', transform: 'rotate(45deg)' }} />
+            <span className="w-3 h-3 bg-depth-critical rounded-full" />
             <span className="text-muted-foreground">&gt;20m <span className="font-medium text-foreground">Critical</span></span>
           </div>
         </div>

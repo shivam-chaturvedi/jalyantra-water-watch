@@ -1215,6 +1215,12 @@ export default function AdminPage() {
   const mapChips: string[] = Array.isArray(dashField('mapChips'))
     ? (dashField('mapChips') as string[])
     : [];
+  const impactMetrics: Array<{ label: string; value: string; note: string }> = Array.isArray(dashField('impactMetrics'))
+    ? (dashField('impactMetrics') as Array<{ label: string; value: string; note: string }>)
+    : [];
+  const actionableInsights: Array<{ title: string; description: string }> = Array.isArray(dashField('actionableInsights'))
+    ? (dashField('actionableInsights') as Array<{ title: string; description: string }>)
+    : [];
 
   const insightsCards: Array<{ title: string; description: string; icon?: string }> = Array.isArray(insightsField('cards'))
     ? (insightsField('cards') as Array<{ title: string; description: string; icon?: string }>)
@@ -1954,6 +1960,117 @@ export default function AdminPage() {
                         </div>
                       );
                     })()}
+                  </Card>
+
+                  <Card className="p-5 space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Impact metrics</h3>
+                        <p className="text-xs text-muted-foreground">Editable cards used by the Home page Impact Metrics section.</p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setDashField('impactMetrics', [...impactMetrics, { label: '', value: '', note: '' }])}
+                        disabled={isBusy}
+                        className="text-teal-700 border-teal-300 hover:bg-teal-50"
+                      >
+                        <Plus className="mr-1 h-3 w-3" /> Add metric
+                      </Button>
+                    </div>
+                    <div className="space-y-3">
+                      {impactMetrics.map((metric, idx) => (
+                        <Card key={idx} className="p-3">
+                          <div className="mb-2 flex items-center justify-between">
+                            <Badge variant="outline" className="text-xs">Metric {idx + 1}</Badge>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-500 hover:text-red-600 h-6 w-6 p-0"
+                              onClick={() => setDashField('impactMetrics', impactMetrics.filter((_, i) => i !== idx))}
+                              disabled={isBusy}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <div className="grid gap-2 md:grid-cols-3">
+                            <Input
+                              placeholder="Label"
+                              value={metric.label}
+                              onChange={(e) => setDashField('impactMetrics', impactMetrics.map((m, i) => i === idx ? { ...m, label: e.target.value } : m))}
+                              disabled={isBusy}
+                            />
+                            <Input
+                              placeholder="Value"
+                              value={metric.value}
+                              onChange={(e) => setDashField('impactMetrics', impactMetrics.map((m, i) => i === idx ? { ...m, value: e.target.value } : m))}
+                              disabled={isBusy}
+                            />
+                            <Input
+                              placeholder="Note"
+                              value={metric.note}
+                              onChange={(e) => setDashField('impactMetrics', impactMetrics.map((m, i) => i === idx ? { ...m, note: e.target.value } : m))}
+                              disabled={isBusy}
+                            />
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </Card>
+
+                  <Card className="p-5 space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Actionable insights</h3>
+                        <p className="text-xs text-muted-foreground">Cards shown in the Home page Actionable Insights section.</p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setDashField('actionableInsights', [...actionableInsights, { title: '', description: '' }])}
+                        disabled={isBusy}
+                        className="text-teal-700 border-teal-300 hover:bg-teal-50"
+                      >
+                        <Plus className="mr-1 h-3 w-3" /> Add insight
+                      </Button>
+                    </div>
+                    <div className="space-y-3">
+                      {actionableInsights.map((item, idx) => (
+                        <Card key={idx} className="p-3">
+                          <div className="mb-2 flex items-center justify-between">
+                            <Badge variant="outline" className="text-xs">Insight {idx + 1}</Badge>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-500 hover:text-red-600 h-6 w-6 p-0"
+                              onClick={() => setDashField('actionableInsights', actionableInsights.filter((_, i) => i !== idx))}
+                              disabled={isBusy}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <div className="space-y-2">
+                            <Input
+                              placeholder="Title"
+                              value={item.title}
+                              onChange={(e) => setDashField('actionableInsights', actionableInsights.map((a, i) => i === idx ? { ...a, title: e.target.value } : a))}
+                              disabled={isBusy}
+                            />
+                            <Textarea
+                              placeholder="Description"
+                              value={item.description}
+                              onChange={(e) => setDashField('actionableInsights', actionableInsights.map((a, i) => i === idx ? { ...a, description: e.target.value } : a))}
+                              disabled={isBusy}
+                              className="min-h-[70px]"
+                            />
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
                   </Card>
                 </div>
                 <SaveBar
