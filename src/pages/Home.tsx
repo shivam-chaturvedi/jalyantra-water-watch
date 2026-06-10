@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, MouseEvent, useCallback, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, MouseEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Footer } from "@/components/Footer";
@@ -6,6 +6,7 @@ import GoogleTranslateDropdown from "@/components/GoogleTranslate";
 import { useAppPages, useSiteFlags } from "@/hooks/useSiteConfig";
 import NotFound from "./NotFound";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "react-router-dom";
 import { fetchDeployment, fetchSiteContent } from "@/lib/siteAdmin";
 import {
   mergeHomeContentWithDefaults,
@@ -105,6 +106,7 @@ function HeroCarousel({ items }: { items: string[] }) {
 
 export default function Home() {
   const { kpiStats, totalReadings, totalWaterMonitored } = useGroundwaterData();
+  const location = useLocation();
   const flagsQuery = useSiteFlags();
   const pagesQuery = useAppPages();
   const homeContentQuery = useQuery({
@@ -257,6 +259,17 @@ Details: ${contactInfo.details}`,
     if (!section) return;
     section.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
+
+  useEffect(() => {
+    const hash = location.hash.replace(/^#/, "").trim();
+    if (!hash) return;
+
+    const raf = window.requestAnimationFrame(() => {
+      scrollToSection(hash);
+    });
+
+    return () => window.cancelAnimationFrame(raf);
+  }, [location.hash, scrollToSection]);
 
   const navigateToDashboard = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();

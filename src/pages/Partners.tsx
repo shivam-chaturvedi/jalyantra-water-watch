@@ -77,7 +77,7 @@ export default function PartnersPage() {
               <Button className="rounded-full bg-teal-600 px-6 py-5 text-sm font-semibold text-white hover:bg-teal-700">
                 Partner With JalYantra
               </Button>
-              <Button variant="outline" className="rounded-full border-teal-200 px-6 py-5 text-sm font-semibold text-teal-700 hover:bg-teal-50">
+              <Button variant="outline" className="rounded-full border-teal-200 px-6 py-5 text-sm font-semibold text-teal-700 transition-colors hover:border-blue-950 hover:bg-blue-950 hover:text-white">
                 <Mail className="mr-2 h-4 w-4" />
                 support@jalyantra.tech
               </Button>
@@ -101,7 +101,7 @@ export default function PartnersPage() {
               <h2 className="text-2xl font-bold text-foreground">Krushi Vikas</h2>
             </div>
             <CollapsibleTrigger asChild>
-              <Button variant="outline" className="rounded-full border-teal-200 text-teal-700 hover:bg-teal-50">
+              <Button variant="outline" className="rounded-full border-teal-200 text-teal-700 transition-colors hover:border-blue-950 hover:bg-blue-950 hover:text-white">
                 Toggle section
                 <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
