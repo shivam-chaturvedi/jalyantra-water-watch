@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import NotFound from './NotFound';
@@ -31,6 +31,27 @@ type DeploymentData = {
   previewVideoUrl: string;
   previewImages: string[];
 };
+
+const fallbackDeployments: DeploymentRecord[] = [
+  {
+    slug: 'sample-deployment',
+    title: 'Sample deployment',
+    updated_at: new Date(0).toISOString(),
+    data: {
+      heading: 'Deployments (offline fallback)',
+      intro: 'Showing sample content because the latest deployments could not be loaded right now.',
+      summary: 'Once the connection is back, this page will automatically show the most recent deployment entries.',
+      interviewVideoUrl: '',
+      installations: [
+        { title: 'Installation site 1', videoUrl: '', notes: 'Add video + notes from the Admin panel.' },
+        { title: 'Installation site 2', videoUrl: '', notes: 'Add video + notes from the Admin panel.' },
+      ],
+      gallery: [],
+      previewVideoUrl: '',
+      previewImages: [],
+    },
+  },
+];
 
 function parseData(raw: Record<string, unknown>): DeploymentData {
   const installations: Installation[] = Array.isArray(raw.installations)
@@ -229,28 +250,10 @@ export default function DeploymentsPage() {
     enabled: !(pagesQuery.isSuccess && !isEnabled),
   });
 
-  const fallbackDeployments: DeploymentRecord[] = [
-    {
-      slug: 'sample-deployment',
-      title: 'Sample deployment',
-      updated_at: new Date(0).toISOString(),
-      data: {
-        heading: 'Deployments (offline fallback)',
-        intro: 'Showing sample content because the latest deployments could not be loaded right now.',
-        summary: 'Once the connection is back, this page will automatically show the most recent deployment entries.',
-        interviewVideoUrl: '',
-        installations: [
-          { title: 'Installation site 1', videoUrl: '', notes: 'Add video + notes from the Admin panel.' },
-          { title: 'Installation site 2', videoUrl: '', notes: 'Add video + notes from the Admin panel.' },
-        ],
-        gallery: [],
-        previewVideoUrl: '',
-        previewImages: [],
-      },
-    },
-  ];
-
-  const deployments = deploymentsQuery.isSuccess ? deploymentsQuery.data ?? [] : fallbackDeployments;
+  const deployments = useMemo(
+    () => (deploymentsQuery.isSuccess ? deploymentsQuery.data ?? [] : fallbackDeployments),
+    [deploymentsQuery.isSuccess, deploymentsQuery.data],
+  );
 
   const visibleDeployments = useMemo(
     () => deployments.filter((d) => {
@@ -260,7 +263,19 @@ export default function DeploymentsPage() {
     }),
     [deployments],
   );
-  const defaultDeploymentSlug = visibleDeployments.find((record) => record.slug === 'alibaug-raigad')?.slug ?? visibleDeployments[0]?.slug ?? '';
+  const defaultDeploymentSlug =
+    visibleDeployments.find((record) => record.slug === 'alibaug-raigad')?.slug ?? visibleDeployments[0]?.slug ?? '';
+  const [selectedDeploymentSlug, setSelectedDeploymentSlug] = useState('');
+
+  useEffect(() => {
+    if (!defaultDeploymentSlug) return;
+
+    setSelectedDeploymentSlug((current) => {
+      if (!current || current === 'sample-deployment') return defaultDeploymentSlug;
+      if (!visibleDeployments.some((record) => record.slug === current)) return defaultDeploymentSlug;
+      return current;
+    });
+  }, [defaultDeploymentSlug, visibleDeployments]);
 
   if (pagesQuery.isSuccess && !isEnabled) return <NotFound />;
 
@@ -301,7 +316,7 @@ export default function DeploymentsPage() {
 
         {/* Deployments — one tab per site, full content shown directly */}
         {visibleDeployments.length > 0 && (
-          <Tabs defaultValue={defaultDeploymentSlug} className="w-full">
+          <Tabs value={selectedDeploymentSlug || defaultDeploymentSlug} onValueChange={setSelectedDeploymentSlug} className="w-full">
             <TabsList className="flex flex-wrap h-auto gap-1 rounded-[20px] border border-border bg-muted/40 p-1">
               {visibleDeployments.map((record) => (
                 <TabsTrigger

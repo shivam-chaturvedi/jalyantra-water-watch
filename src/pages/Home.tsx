@@ -6,8 +6,13 @@ import GoogleTranslateDropdown from "@/components/GoogleTranslate";
 import { useAppPages, useSiteFlags } from "@/hooks/useSiteConfig";
 import NotFound from "./NotFound";
 import { useQuery } from "@tanstack/react-query";
-import { fetchSiteContent } from "@/lib/siteAdmin";
-import { mergeHomeContentWithDefaults } from "@/lib/contentDefaults";
+import { fetchDeployment, fetchSiteContent } from "@/lib/siteAdmin";
+import {
+  mergeHomeContentWithDefaults,
+  type HomeDashboardAlert,
+  type HomeDashboardStat,
+  type HomeHeroContent,
+} from "@/lib/contentDefaults";
 import { 
   resolveImageSrc, 
   toDrivePreviewUrl, 
@@ -106,8 +111,14 @@ export default function Home() {
     queryKey: ["site_content", "home"],
     queryFn: () => fetchSiteContent("home"),
   });
+  const deploymentsPreviewQuery = useQuery({
+    queryKey: ["deployments", "alibaug-raigad", "preview"],
+    queryFn: () => fetchDeployment("alibaug-raigad"),
+  });
   const isHomeEnabled =
     pagesQuery.data?.find((p) => p.path === "/")?.is_enabled ?? true;
+  const isDeploymentsPageEnabled =
+    pagesQuery.data?.find((p) => p.path === "/deployments")?.is_enabled ?? true;
   const showDeploymentsSection = flagsQuery.data?.show_deployments ?? true;
   const showValidationSection = flagsQuery.data?.show_validation ?? false;
   const showCarouselSection = flagsQuery.data?.show_image_carousel ?? true;
@@ -122,6 +133,15 @@ export default function Home() {
   const deploymentsContent = homeContent.deployments;
   const validationContent = homeContent.validation;
   const contactContent = homeContent.contact;
+  const deploymentsPreview = deploymentsPreviewQuery.data?.data as
+    | { previewVideoUrl?: string; previewImages?: unknown[] }
+    | undefined;
+  const deploymentsPreviewVideoUrl = String(deploymentsPreview?.previewVideoUrl ?? "").trim();
+  const deploymentsPreviewImages = useMemo(() => {
+    const arr = Array.isArray(deploymentsPreview?.previewImages) ? deploymentsPreview.previewImages : [];
+    const urls = arr.filter((x: unknown) => typeof x === "string") as string[];
+    return urls.length ? urls.slice(0, 4) : [];
+  }, [deploymentsPreview?.previewImages]);
   const impactMetrics =
     dashboardContent.impactMetrics.length > 0
       ? dashboardContent.impactMetrics
@@ -146,8 +166,8 @@ export default function Home() {
           { title: "Seasonal Groundwater Trends", description: "Monitor how groundwater levels rise or fall over time." },
         ];
 
-  const primaryCtaHref = String((hero as any).primaryCtaHref ?? "/dashboard").trim() || "/dashboard";
-  const secondaryCtaHref = String((hero as any).secondaryCtaHref ?? "#how-it-works").trim() || "#how-it-works";
+  const primaryCtaHref = String((hero as HomeHeroContent).primaryCtaHref ?? "/dashboard").trim() || "/dashboard";
+  const secondaryCtaHref = String((hero as HomeHeroContent).secondaryCtaHref ?? "#how-it-works").trim() || "#how-it-works";
 
   const [contactInfo, setContactInfo] = useState({
     name: "",
@@ -232,10 +252,6 @@ Details: ${contactInfo.details}`,
     }
   };
 
-  if (pagesQuery.isSuccess && !isHomeEnabled) {
-    return <NotFound />;
-  }
-
   const scrollToSection = useCallback((sectionId: string) => {
     const section = document.getElementById(sectionId);
     if (!section) return;
@@ -251,6 +267,10 @@ Details: ${contactInfo.details}`,
     event.preventDefault();
     window.location.assign("/");
   }, []);
+
+  if (pagesQuery.isSuccess && !isHomeEnabled) {
+    return <NotFound />;
+  }
 
   return (
     <>
@@ -447,7 +467,7 @@ Details: ${contactInfo.details}`,
 	              </p>
 	            </div>
 	            <div className="grid gap-5 md:grid-cols-4">
-	              {dashboardContent.stats.map((stat: any) => (
+              {dashboardContent.stats.map((stat: HomeDashboardStat) => (
 	                <div key={stat.label} className="rounded-[24px] border-2 border-teal-100 bg-gradient-to-br from-teal-50 to-white p-6 text-muted-foreground shadow-md">
 	                  <p className="text-sm uppercase tracking-[0.3em] font-semibold text-teal-500">{stat.label}</p>
 	                  <p className="mt-2 text-4xl font-extrabold" style={{ color: '#0f766e' }}>{stat.value}</p>
@@ -464,7 +484,7 @@ Details: ${contactInfo.details}`,
 				                  </span>
 				                </div>
 				                <div className="mt-5 space-y-3 text-muted-foreground">
-				                  {dashboardContent.alerts.map((alert: any) => (
+                  {dashboardContent.alerts.map((alert: HomeDashboardAlert) => (
 				                    <p
 				                      key={alert.text}
 				                      className={
@@ -576,47 +596,84 @@ Details: ${contactInfo.details}`,
             </div>
           </section>
 
-          {showDeploymentsSection && (
-            <section className="container mx-auto space-y-8 px-4" id="deployments">
-              <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-                <div className="space-y-4 rounded-[32px] border border-teal-100 bg-gradient-to-br from-teal-50 via-white to-emerald-50 p-6 shadow-sm">
-                  <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">{deploymentsContent.kicker}</p>
-                  <h2 className="text-3xl font-bold text-foreground">{deploymentsContent.heading}</h2>
-                  <p className="text-sm leading-relaxed text-muted-foreground">{deploymentsContent.description}</p>
-                  <div className="overflow-hidden rounded-[24px] border border-teal-100 bg-black">
-                    <div className="flex aspect-video items-center justify-center bg-black px-6 text-center">
-                      <div className="space-y-2">
-                        <p className="text-sm font-semibold uppercase tracking-[0.35em] text-teal-200">
-                          {deploymentsContent.videoPlaceholder}
-                        </p>
-                        <p className="text-xs text-white/70">{deploymentsContent.videoCaption}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+	          {showDeploymentsSection && (
+	            <section className="container mx-auto space-y-8 px-4" id="deployments">
+	              <div className="space-y-2">
+	                <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">{deploymentsContent.kicker}</p>
+	                <h2 className="text-3xl font-bold text-foreground">{deploymentsContent.heading}</h2>
+	                <p className="text-sm text-muted-foreground">
+	                  {deploymentsContent.description}
+	                </p>
+	              </div>
+	              <div className="grid gap-3 lg:grid-cols-2">
+	                <div className="rounded-[24px] border border-border bg-card/70 p-3 sm:p-4 flex flex-col justify-center">
+	                  <div className="overflow-hidden rounded-[20px] bg-muted shadow-sm">
+	                    {deploymentsPreviewVideoUrl ? (
+	                      <div className="mx-auto w-full">
+	                        <div className="aspect-[16/9] w-full bg-black shadow-lg">
+	                          {toDrivePreviewUrl(deploymentsPreviewVideoUrl) ? (
+	                            <iframe
+	                              title="Deployment preview video"
+	                              src={toDrivePreviewUrl(deploymentsPreviewVideoUrl) ?? undefined}
+	                              className="h-full w-full"
+	                              allow="autoplay; encrypted-media"
+	                              allowFullScreen
+	                            />
+	                          ) : (
+	                            <video className="h-full w-full object-cover" src={deploymentsPreviewVideoUrl} controls playsInline />
+	                          )}
+	                        </div>
+	                      </div>
+	                    ) : (
+	                      <div className="h-48 w-full flex items-center justify-center text-xs font-mono text-muted-foreground">
+	                        {deploymentsContent.videoPlaceholder}
+	                      </div>
+	                    )}
+	                  </div>
+	                  {deploymentsContent.videoCaption && !deploymentsContent.videoCaption.includes('managed from the Admin panel') && (
+	                    <p className="mt-2 text-center text-[11px] text-muted-foreground italic leading-tight">
+	                      {deploymentsContent.videoCaption}
+	                    </p>
+	                  )}
+	                </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {deploymentsContent.placeholderCards.map((card, index) => (
-                    <div
-                      key={card.title}
-                      className="group rounded-[28px] border border-border bg-card/80 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
-                    >
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-teal-600">
-                          {deploymentsContent.showMoreLabel}
-                        </p>
-                        <span className="rounded-full bg-teal-50 px-2.5 py-1 text-[10px] font-semibold text-teal-700">
-                          0{index + 1}
-                        </span>
-                      </div>
-                      <p className="mt-3 text-lg font-semibold text-foreground">{card.title}</p>
-                      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{card.subtitle}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-          )}
+	                <div className="grid gap-2 grid-cols-2">
+	                  {(deploymentsPreviewImages.length ? deploymentsPreviewImages : deploymentsContent.placeholderCards.slice(0, 4)).map((item: string | { title: string; subtitle: string }, idx: number) =>
+	                    typeof item === "string" ? (
+	                      <div key={item} className="overflow-hidden rounded-[20px] border border-border bg-card/70 shadow-sm transition-all hover:shadow-md aspect-[4/3] h-full">
+	                        <ZoomableImage
+	                          src={resolveImageSrc(item)}
+	                          alt={`Deployment preview ${idx + 1}`}
+	                          className="h-full w-full object-cover"
+	                          loading="lazy"
+	                        />
+	                      </div>
+	                    ) : (
+	                      <div key={item.title} className="rounded-[20px] border border-border bg-card/70 p-3 flex flex-col justify-center items-center text-center aspect-[4/3] h-full">
+	                        <div className="h-10 w-10 rounded-full bg-teal-50 flex items-center justify-center mb-1">
+	                          <Award className="h-5 w-5 text-teal-200" />
+	                        </div>
+	                        <h3 className="text-[10px] font-semibold text-foreground leading-tight">{item.title}</h3>
+	                        <p className="text-[9px] text-muted-foreground leading-tight">{item.subtitle}</p>
+	                      </div>
+	                    ),
+	                  )}
+	                </div>
+	              </div>
+
+	              {isDeploymentsPageEnabled && (
+	                <div className="flex justify-center pt-2">
+	                  <Button
+	                    size="lg"
+	                    className="rounded-full px-10 py-3 text-base font-bold bg-teal-600 hover:bg-teal-700 shadow-lg"
+	                    onClick={() => window.location.assign('/deployments')}
+	                  >
+	                    {deploymentsContent.showMoreLabel}
+	                  </Button>
+	                </div>
+	              )}
+	            </section>
+	          )}
 
           <section className="container mx-auto space-y-8 px-4 hidden" aria-hidden="true">
             <div className="space-y-2">

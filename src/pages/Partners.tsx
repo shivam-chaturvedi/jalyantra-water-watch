@@ -140,7 +140,6 @@ export default function PartnersPage() {
                   <div className="aspect-video bg-black">
                     <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-teal-950 via-slate-950 to-black p-6 text-center">
                       <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-[0.35em] text-teal-200">Interview placeholder</p>
                         <p className="text-sm text-white/70">Replace with the interview video asset when it is ready.</p>
                       </div>
                     </div>
