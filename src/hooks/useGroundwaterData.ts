@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { get, onValue, ref } from 'firebase/database';
 import {
   Alert,
@@ -6,12 +6,29 @@ import {
   KPIStats,
   SensorReading,
   FirebaseReadings,
+  FirebaseDevicesTree,
   transformFirebaseReadings,
+  mergeReadingsWithDeviceRegistry,
   calculateDistrictStats,
   generateAlerts,
   calculateKPIStats,
 } from '@/lib/data';
 import { database } from '@/lib/firebaseClient';
+import { fetchAllDeviceMasterData, type DeviceMasterData } from '@/lib/siteAdmin';
+
+function applyDeviceMasterFlags(
+  sensors: SensorReading[],
+  masterById: Map<string, DeviceMasterData>,
+): SensorReading[] {
+  return sensors.map((sensor) => {
+    const master = masterById.get(sensor.deviceId);
+    if (!master) return sensor;
+    return {
+      ...sensor,
+      isPumpConnected: master.is_pump_connected,
+    };
+  });
+}
 
 interface UseGroundwaterDataReturn {
   sensors: SensorReading[];
@@ -30,7 +47,8 @@ interface UseGroundwaterDataReturn {
 }
 
 export function useGroundwaterData(): UseGroundwaterDataReturn {
-  const [sensors, setSensors] = useState<SensorReading[]>([]);
+  const [rawSensors, setRawSensors] = useState<SensorReading[]>([]);
+  const [deviceMasterById, setDeviceMasterById] = useState<Map<string, DeviceMasterData>>(new Map());
   const [districts, setDistricts] = useState<District[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [kpiStats, setKpiStats] = useState<KPIStats | null>(null);
@@ -40,14 +58,24 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
   const [availableLocations, setAvailableLocations] = useState<string[]>([]);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const readingsPath = (import.meta.env.VITE_FIREBASE_READINGS_PATH as string | undefined) ?? 'readings';
+  const devicesPath = (import.meta.env.VITE_FIREBASE_DEVICES_PATH as string | undefined) ?? 'devices';
 
-  const processSnapshot = useCallback((value: FirebaseReadings) => {
-    const sensorData = transformFirebaseReadings(value);
+  const sensors = useMemo(
+    () => applyDeviceMasterFlags(rawSensors, deviceMasterById),
+    [rawSensors, deviceMasterById],
+  );
+
+  const processSnapshot = useCallback(
+    (readings: FirebaseReadings, devices: FirebaseDevicesTree) => {
+      const sensorData = mergeReadingsWithDeviceRegistry(
+        transformFirebaseReadings(readings),
+        devices,
+      );
     const districtData = calculateDistrictStats(sensorData);
     const alertData = generateAlerts(districtData);
     const kpiData = calculateKPIStats(sensorData, districtData);
 
-    setSensors(sensorData);
+    setRawSensors(sensorData);
     setDistricts(districtData);
     setAlerts(alertData);
     setKpiStats(kpiData);
@@ -71,16 +99,32 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
     );
   }, []);
 
+  useEffect(() => {
+    fetchAllDeviceMasterData()
+      .then((rows) => {
+        setDeviceMasterById(new Map(rows.map((row) => [row.device_id, row])));
+      })
+      .catch((error) => {
+        console.error('Failed to fetch device master data', error);
+      });
+  }, []);
+
   const fetchLatest = useCallback(async () => {
     setIsLoading(true);
     try {
-      const snapshot = await get(ref(database, readingsPath));
-      processSnapshot((snapshot.val() ?? {}) as FirebaseReadings);
+      const [readingsSnapshot, devicesSnapshot] = await Promise.all([
+        get(ref(database, readingsPath)),
+        get(ref(database, devicesPath)),
+      ]);
+      processSnapshot(
+        (readingsSnapshot.val() ?? {}) as FirebaseReadings,
+        (devicesSnapshot.val() ?? {}) as FirebaseDevicesTree,
+      );
     } catch (error) {
       console.error('Failed to fetch Firebase readings', error);
       setIsLoading(false);
     }
-  }, [processSnapshot, readingsPath]);
+  }, [processSnapshot, readingsPath, devicesPath]);
 
   useEffect(() => {
     fetchLatest();
@@ -89,18 +133,36 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
   useEffect(() => {
     if (!isLive) return;
     const readingsRef = ref(database, readingsPath);
-    const unsubscribe = onValue(
+    const devicesRef = ref(database, devicesPath);
+
+    let latestReadings: FirebaseReadings = {};
+    let latestDevices: FirebaseDevicesTree = {};
+
+    const publish = () => processSnapshot(latestReadings, latestDevices);
+
+    const unsubscribeReadings = onValue(
       readingsRef,
       (snapshot) => {
-        processSnapshot((snapshot.val() ?? {}) as FirebaseReadings);
+        latestReadings = (snapshot.val() ?? {}) as FirebaseReadings;
+        publish();
       },
-      (error) => {
-        console.error('Realtime subscription error', error);
-      },
+      (error) => console.error('Realtime readings subscription error', error),
     );
 
-    return () => unsubscribe();
-  }, [isLive, processSnapshot, readingsPath]);
+    const unsubscribeDevices = onValue(
+      devicesRef,
+      (snapshot) => {
+        latestDevices = (snapshot.val() ?? {}) as FirebaseDevicesTree;
+        publish();
+      },
+      (error) => console.error('Realtime devices subscription error', error),
+    );
+
+    return () => {
+      unsubscribeReadings();
+      unsubscribeDevices();
+    };
+  }, [isLive, processSnapshot, readingsPath, devicesPath]);
 
   const refreshData = useCallback(() => {
     fetchLatest();

@@ -40,6 +40,7 @@ export type DeviceMasterData = {
   well_depth_m: number | null;
   pump_intake_level_m: number | null;
   pump_diameter_in: number | null;
+  is_pump_connected: boolean;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -117,7 +118,7 @@ export async function uploadFileToBucket(
     throw uploadError;
   }
 
-  const publicUrl = getPublicMediaUrl(bucket, objectPath);
+  const publicUrl = `${getPublicMediaUrl(bucket, objectPath)}?v=${Date.now()}`;
   console.log(`[Storage] Upload success: ${publicUrl}`);
   return { bucket, objectPath, publicUrl };
 }
@@ -201,11 +202,25 @@ export async function deleteDeployment(slug: string): Promise<void> {
 export async function fetchDeviceMasterData(deviceId: string): Promise<DeviceMasterData | null> {
   const { data, error } = await supabase
     .from('device_master_data')
-    .select('device_id,well_diameter_m,well_depth_m,pump_intake_level_m,pump_diameter_in,notes,created_at,updated_at')
+    .select('device_id,well_diameter_m,well_depth_m,pump_intake_level_m,pump_diameter_in,is_pump_connected,notes,created_at,updated_at')
     .eq('device_id', deviceId)
     .maybeSingle();
   if (error) throw error;
   return (data ?? null) as DeviceMasterData | null;
+}
+
+export async function fetchAllDeviceMasterData(): Promise<DeviceMasterData[]> {
+  const { data, error } = await supabase
+    .from('device_master_data')
+    .select('device_id,well_diameter_m,well_depth_m,pump_intake_level_m,pump_diameter_in,is_pump_connected,notes,created_at,updated_at')
+    .order('device_id', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as DeviceMasterData[];
+}
+
+export async function deleteDeviceMasterData(deviceId: string): Promise<void> {
+  const { error } = await supabase.from('device_master_data').delete().eq('device_id', deviceId);
+  if (error) throw error;
 }
 
 export async function upsertDeviceMasterData(patch: {
@@ -214,6 +229,7 @@ export async function upsertDeviceMasterData(patch: {
   well_depth_m?: number | null;
   pump_intake_level_m?: number | null;
   pump_diameter_in?: number | null;
+  is_pump_connected?: boolean;
   notes?: string | null;
 }): Promise<void> {
   const { error } = await supabase.from('device_master_data').upsert(
@@ -223,6 +239,7 @@ export async function upsertDeviceMasterData(patch: {
       ...(patch.well_depth_m !== undefined ? { well_depth_m: patch.well_depth_m } : {}),
       ...(patch.pump_intake_level_m !== undefined ? { pump_intake_level_m: patch.pump_intake_level_m } : {}),
       ...(patch.pump_diameter_in !== undefined ? { pump_diameter_in: patch.pump_diameter_in } : {}),
+      ...(patch.is_pump_connected !== undefined ? { is_pump_connected: patch.is_pump_connected } : {}),
       ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
     },
     { onConflict: 'device_id' },

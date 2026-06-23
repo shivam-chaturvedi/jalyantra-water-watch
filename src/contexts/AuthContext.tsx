@@ -129,8 +129,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
 
     try {
-      const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
       if (loginError) throw loginError;
+
+      const sessionUser = data.user;
+      if (!sessionUser) throw new Error('Signed in, but no user was returned.');
+
+      const allowed = await checkAdminRights(sessionUser.id);
+      if (!allowed) {
+        await supabase.auth.signOut();
+        const message = 'Access denied. Your account is not marked as admin.';
+        setError(message);
+        setUser(null);
+        setIsAdmin(false);
+        throw new Error(message);
+      }
+
+      setUser(sessionUser);
+      setIsAdmin(true);
+      setError(null);
     } catch (loginError) {
       setError(resolveAuthError(loginError));
       throw loginError;

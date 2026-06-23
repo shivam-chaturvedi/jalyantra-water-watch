@@ -15,6 +15,8 @@ export interface FirebaseReadingEntry {
   siteName?: string;
   remarks?: string;
   averageSampleCount?: number;
+  /** When false, the device clock was not synced — reading should be ignored. */
+  clockSynced?: boolean;
   installerCompany?: string;
   installerName?: string;
   installerPhone?: string;
@@ -106,12 +108,20 @@ export function instantFromRtdbChildKey(childKey: string): number | null {
   return null;
 }
 
+function coerceNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 function isLikelyReadingRow(obj: Record<string, unknown>): boolean {
-  return (
-    typeof obj.depth === 'number' &&
-    typeof obj.lat === 'number' &&
-    typeof obj.long === 'number'
-  );
+  const depth = coerceNumber(obj.depth);
+  const lat = coerceNumber(obj.lat);
+  const long = coerceNumber(obj.long ?? obj.lng ?? obj.lon);
+  return depth != null && lat != null && long != null;
 }
 
 const MAX_READING_NEST_DEPTH = 8;
@@ -150,11 +160,38 @@ function leavesForDeviceBatch(
   return expandReadingLeaves(b, '', 0);
 }
 
+function isClockSyncExplicitlyFalse(entry: FirebaseReadingEntry): boolean {
+  const raw = entry as Record<string, unknown>;
+  const v = raw.clockSynced ?? raw.clock_synced ?? raw.isClockSynced;
+  return v === false || v === 0 || v === 'false';
+}
+
+/** Device sent data before NTCP clock sync — e.g. collectedDate "UNSYNCED", collectedDateTime "uptime:33s". */
+export function isUnsyncedReadingEntry(entry: FirebaseReadingEntry): boolean {
+  if (isClockSyncExplicitlyFalse(entry)) return true;
+
+  const cd = entry.collectedDate?.trim();
+  if (cd && /unsynced/i.test(cd)) return true;
+
+  const cdt = entry.collectedDateTime?.trim();
+  if (cdt) {
+    if (/^uptime:/i.test(cdt)) return true;
+    if (/unsynced/i.test(cdt)) return true;
+  }
+
+  return false;
+}
+
 /**
- * Sample instant for ordering & charts. Uses `collectedDateTime`, `collectedDate`, RTDB **child key** when it is Unix
- * epoch (common in your DB), then other fields.
+ * Resolves a reading instant only when the device provided a trustworthy timestamp.
+ * Returns null for unsynced clocks, bare dates without time, and other fallbacks.
  */
-export function readingInstantMs(entry: FirebaseReadingEntry, rtdbChildKey?: string): number {
+export function resolveReadingInstantMs(
+  entry: FirebaseReadingEntry,
+  rtdbChildKey?: string,
+): number | null {
+  if (isUnsyncedReadingEntry(entry)) return null;
+
   let t = tryParseInstant(entry.collectedDateTime);
   if (t != null) return t;
 
@@ -169,28 +206,47 @@ export function readingInstantMs(entry: FirebaseReadingEntry, rtdbChildKey?: str
     if (t != null) return t;
   }
 
-  if (cd) {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(cd)) {
-      const noon = Date.parse(`${cd}T12:00:00`);
-      if (!Number.isNaN(noon)) return noon;
-    }
-    t = tryParseInstant(cd);
-    if (t != null) return t;
-  }
-
-  t = tryParseInstant(entry.lastSeen);
-  if (t != null) return t;
-
-  t = tryParseInstant(entry.deviceOnlineSince);
-  if (t != null) return t;
-
   if (typeof entry.timestamp === 'number' && Number.isFinite(entry.timestamp)) {
     let ms = entry.timestamp;
     if (ms > 0 && ms < 1e12) ms *= 1000;
     if (ms >= PLAUSIBLE_MS_MIN && ms <= PLAUSIBLE_MS_MAX) return ms;
   }
 
+  return null;
+}
+
+/**
+ * Sample instant for ordering & charts. Uses `collectedDateTime`, `collectedDate`, RTDB **child key** when it is Unix
+ * epoch (common in your DB), then other fields. Falls back to `Date.now()` only for display helpers.
+ */
+export function readingInstantMs(entry: FirebaseReadingEntry, rtdbChildKey?: string): number {
+  const resolved = resolveReadingInstantMs(entry, rtdbChildKey);
+  if (resolved != null) return resolved;
+
+  const cd = entry.collectedDate?.trim();
+  if (cd) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(cd)) {
+      const noon = Date.parse(`${cd}T12:00:00`);
+      if (!Number.isNaN(noon)) return noon;
+    }
+    const t = tryParseInstant(cd);
+    if (t != null) return t;
+  }
+
+  let t = tryParseInstant(entry.lastSeen);
+  if (t != null) return t;
+
+  t = tryParseInstant(entry.deviceOnlineSince);
+  if (t != null) return t;
+
   return Date.now();
+}
+
+export function hasValidReadingTimestamp(
+  entry: FirebaseReadingEntry,
+  rtdbChildKey?: string,
+): boolean {
+  return resolveReadingInstantMs(entry, rtdbChildKey) != null;
 }
 
 /** Last sync line: show the actual sample date/time (no “As of …” / “Xh ago”). */
@@ -233,6 +289,125 @@ export function formatLastSyncDate(
 export type FirebaseDeviceBatch = Record<string, FirebaseReadingEntry | null> | null;
 export type FirebaseReadings = Record<string, FirebaseDeviceBatch> | null;
 
+export type FirebaseDeviceRegistryMeta = {
+  deviceId?: string;
+  lat?: number;
+  long?: number;
+  lng?: number;
+  siteName?: string;
+  configuredAt?: string;
+  deviceOnlineSince?: string;
+  installerCompany?: string;
+  installerName?: string;
+  installerPhone?: string;
+  remarks?: string;
+};
+
+export type FirebaseDeviceRegistryEntry = {
+  meta?: FirebaseDeviceRegistryMeta | null;
+} | null;
+
+export type FirebaseDevicesTree = Record<string, FirebaseDeviceRegistryEntry> | null;
+
+function readingCoords(
+  en: FirebaseReadingEntry,
+  raw: Record<string, unknown>,
+): { depth: number; lat: number; long: number } | null {
+  const depth = coerceNumber(en.depth ?? raw.depth);
+  const lat = coerceNumber(en.lat ?? raw.lat);
+  const long = coerceNumber(en.long ?? raw.long ?? raw.lng ?? raw.lon);
+  if (depth == null || lat == null || long == null) return null;
+  return { depth, lat, long };
+}
+
+function mapLeafToHistoryPoint(
+  leafKey: string,
+  entry: Record<string, unknown>,
+  batchKey: string,
+  opts: { requireValidTimestamp: boolean },
+): ExtendedHistoryPoint | null {
+  const en = entry as FirebaseReadingEntry;
+  if (isUnsyncedReadingEntry(en)) return null;
+
+  const raw = entry;
+  const coords = readingCoords(en, raw);
+  if (!coords) return null;
+
+  const validTimestamp = resolveReadingInstantMs(en, leafKey);
+  const timestamp = validTimestamp ?? (opts.requireValidTimestamp ? null : readingInstantMs(en, leafKey));
+  if (timestamp == null) return null;
+
+  const collectedDateTime = en.collectedDateTime?.trim();
+  const rtdbExport = rtdbReadingToExportRow(leafKey, entry);
+  const deviceOnlineSince =
+    typeof en.deviceOnlineSince === 'string' && en.deviceOnlineSince.trim()
+      ? en.deviceOnlineSince.trim()
+      : undefined;
+  const triggerSource =
+    typeof en.triggerSource === 'string' && en.triggerSource.trim() ? en.triggerSource.trim() : undefined;
+  const uptimeSeconds =
+    typeof en.uptimeSeconds === 'number' && Number.isFinite(en.uptimeSeconds) ? en.uptimeSeconds : undefined;
+
+  return {
+    id: leafKey,
+    depth: sanitizeDepth(coords.depth),
+    collectedDate: en.collectedDate || new Date(timestamp).toISOString().split('T')[0],
+    ...(collectedDateTime ? { collectedDateTime } : {}),
+    timestamp,
+    lat: coords.lat,
+    long: coords.long,
+    deviceId: en.deviceId || batchKey,
+    district: en.district,
+    ...(deviceOnlineSince ? { deviceOnlineSince } : {}),
+    ...(triggerSource ? { triggerSource } : {}),
+    ...(uptimeSeconds != null ? { uptimeSeconds } : {}),
+    rtdbExport,
+  };
+}
+
+/** Include devices registered under RTDB `devices/{id}/meta` even when they have no readings yet. */
+export function mergeReadingsWithDeviceRegistry(
+  sensors: SensorReading[],
+  registry: FirebaseDevicesTree,
+): SensorReading[] {
+  const byId = new Map(sensors.map((sensor) => [sensor.deviceId, sensor]));
+  if (!registry) return sensors;
+
+  for (const [batchKey, node] of Object.entries(registry)) {
+    const meta = node?.meta;
+    if (!meta) continue;
+
+    const deviceId = String(meta.deviceId ?? batchKey).trim();
+    if (!deviceId || byId.has(deviceId)) continue;
+
+    const lat = coerceNumber(meta.lat);
+    const long = coerceNumber(meta.long ?? meta.lng);
+    if (lat == null || long == null) continue;
+
+    const configuredMs = tryParseInstant(meta.configuredAt ?? undefined);
+    const onlineMs = tryParseInstant(meta.deviceOnlineSince ?? undefined);
+    const syncMs = configuredMs ?? onlineMs ?? Date.now();
+
+    byId.set(deviceId, {
+      id: batchKey,
+      deviceId,
+      depth: 0,
+      collectedDate: new Date(syncMs).toISOString().split('T')[0],
+      lat,
+      long,
+      district: matchDistrictName(lat, long),
+      status: 'offline',
+      lastSync: new Date(syncMs).toISOString(),
+      history: [],
+      validationFlags: ['Registered in devices tree — no timestamped readings yet'],
+    });
+  }
+
+  return Array.from(byId.values()).sort((a, b) =>
+    a.deviceId.localeCompare(b.deviceId, undefined, { numeric: true }),
+  );
+}
+
 export interface SensorHistoryPoint {
   id: string;
   depth: number;
@@ -264,6 +439,12 @@ export interface SensorReading {
   latestRtdbExport?: RtdbCsvRow;
   history: SensorHistoryPoint[];
   validationFlags?: string[];
+  /** From device master data — false for electrical-only (non-pump) installations. */
+  isPumpConnected?: boolean;
+}
+
+export function isPumpConnectedDevice(sensor: Pick<SensorReading, 'isPumpConnected'>): boolean {
+  return sensor.isPumpConnected !== false;
 }
 
 export interface District {
@@ -526,65 +707,71 @@ export function transformFirebaseReadings(raw: FirebaseReadings): SensorReading[
       const leaves = leavesForDeviceBatch(batchKey, batch);
       if (!leaves.length) return null;
 
-      const historyPoints = leaves
-        .map(({ leafKey, entry }) => {
-          const en = entry as FirebaseReadingEntry;
-          const timestamp = readingInstantMs(en, leafKey);
-          const raw = entry as Record<string, unknown>;
-          const lat =
-            typeof en.lat === 'number'
-              ? en.lat
-              : typeof raw.lat === 'number'
-                ? (raw.lat as number)
-                : null;
-          const long =
-            typeof en.long === 'number'
-              ? en.long
-              : typeof raw.long === 'number'
-                ? (raw.long as number)
-                : typeof raw.lng === 'number'
-                  ? (raw.lng as number)
-                  : typeof raw.lon === 'number'
-                    ? (raw.lon as number)
-                    : null;
+      let skippedWithoutTimestamp = 0;
+      const timestampedPoints: ExtendedHistoryPoint[] = [];
+      const fallbackPoints: ExtendedHistoryPoint[] = [];
 
-          if (en.depth == null || lat == null || long == null) return null;
+      for (const { leafKey, entry } of leaves) {
+        const timestamped = mapLeafToHistoryPoint(leafKey, entry, batchKey, { requireValidTimestamp: true });
+        if (timestamped) {
+          timestampedPoints.push(timestamped);
+          continue;
+        }
 
-          const collectedDateTime = en.collectedDateTime?.trim();
-          const rtdbExport = rtdbReadingToExportRow(leafKey, entry);
-          const deviceOnlineSince =
-            typeof en.deviceOnlineSince === 'string' && en.deviceOnlineSince.trim()
-              ? en.deviceOnlineSince.trim()
-              : undefined;
-          const triggerSource =
-            typeof en.triggerSource === 'string' && en.triggerSource.trim()
-              ? en.triggerSource.trim()
-              : undefined;
-          const uptimeSeconds =
-            typeof en.uptimeSeconds === 'number' && Number.isFinite(en.uptimeSeconds)
-              ? en.uptimeSeconds
-              : undefined;
+        skippedWithoutTimestamp += 1;
+        const fallback = mapLeafToHistoryPoint(leafKey, entry, batchKey, { requireValidTimestamp: false });
+        if (fallback) fallbackPoints.push(fallback);
+      }
 
-          return {
-            id: leafKey,
-            depth: sanitizeDepth(en.depth),
-            collectedDate: en.collectedDate || new Date(timestamp).toISOString().split('T')[0],
+      const historyPoints = timestampedPoints.sort(sortHistoryPoints);
+      const pointsForSensor =
+        historyPoints.length > 0
+          ? historyPoints
+          : fallbackPoints.sort(sortHistoryPoints);
+
+      if (!pointsForSensor.length) return null;
+
+      const sensor = historyPointToSensorPayload(pointsForSensor, batchKey);
+      if (!sensor) return null;
+
+      if (historyPoints.length > 0) {
+        sensor.history = historyPoints.map(
+          ({
+            id,
+            depth,
+            collectedDate,
+            collectedDateTime,
+            timestamp,
+            deviceOnlineSince,
+            triggerSource,
+            uptimeSeconds,
+            rtdbExport,
+          }) => ({
+            id,
+            depth,
+            collectedDate,
             ...(collectedDateTime ? { collectedDateTime } : {}),
             timestamp,
-            lat,
-            long,
-            deviceId: en.deviceId || batchKey,
-            district: en.district,
             ...(deviceOnlineSince ? { deviceOnlineSince } : {}),
             ...(triggerSource ? { triggerSource } : {}),
             ...(uptimeSeconds != null ? { uptimeSeconds } : {}),
-            rtdbExport,
-          };
-        })
-        .filter((point): point is ExtendedHistoryPoint => point !== null)
-        .sort(sortHistoryPoints);
+            ...(rtdbExport ? { rtdbExport: { ...rtdbExport } } : {}),
+          }),
+        );
+      } else {
+        sensor.history = [];
+        sensor.status = 'offline';
+      }
 
-      return historyPointToSensorPayload(historyPoints, batchKey);
+      if (skippedWithoutTimestamp > 0) {
+        const flag =
+          historyPoints.length > 0
+            ? `Ignored ${skippedWithoutTimestamp} reading(s) without a valid timestamp`
+            : `No timestamped readings yet — ignored ${skippedWithoutTimestamp} unsynced sample(s)`;
+        sensor.validationFlags = Array.from(new Set([...(sensor.validationFlags ?? []), flag]));
+      }
+
+      return sensor;
     })
     .filter((sensor): sensor is SensorReading => sensor !== null);
 

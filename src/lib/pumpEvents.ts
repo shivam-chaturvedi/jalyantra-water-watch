@@ -453,3 +453,137 @@ export function chartTimeRangeMs(rows: { timeMs: number; depth: number | null }[
   if (withDepth.length < 2) return 0;
   return Math.max(...withDepth) - Math.min(...withDepth);
 }
+
+// ─── Non-pump devices: daily median depth trend ───────────────────────────────
+
+export type DailyMedianPoint = {
+  date: string;
+  timeMs: number;
+  medianDepth: number;
+  sampleCount: number;
+  label: string;
+};
+
+export type MedianChartRow = {
+  timeMs: number;
+  depth: number;
+  label: string;
+  sampleCount: number;
+};
+
+function medianOf(values: number[]): number {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[mid]!;
+  return (sorted[mid - 1]! + sorted[mid]!) / 2;
+}
+
+function dateKeyForPoint(point: SensorHistoryPoint): string {
+  if (point.collectedDate?.trim()) return point.collectedDate.trim().slice(0, 10);
+  return new Date(point.timestamp).toISOString().slice(0, 10);
+}
+
+function noonMsForDateKey(dateKey: string): number {
+  const ms = Date.parse(`${dateKey}T12:00:00`);
+  return Number.isFinite(ms) ? ms : Date.now();
+}
+
+/** Group timestamped readings by calendar day and compute median depth per day. */
+export function computeDailyMedianDepths(
+  points: SensorHistoryPoint[],
+  sinceMs: number,
+): DailyMedianPoint[] {
+  const byDate = new Map<string, number[]>();
+
+  for (const point of points) {
+    if (!Number.isFinite(point.timestamp) || point.timestamp < sinceMs) continue;
+    const dateKey = dateKeyForPoint(point);
+    const bucket = byDate.get(dateKey) ?? [];
+    bucket.push(point.depth);
+    byDate.set(dateKey, bucket);
+  }
+
+  return Array.from(byDate.entries())
+    .map(([date, depths]) => {
+      const medianDepth = Math.round(medianOf(depths) * 100) / 100;
+      return {
+        date,
+        timeMs: noonMsForDateKey(date),
+        medianDepth,
+        sampleCount: depths.length,
+        label: new Date(noonMsForDateKey(date)).toLocaleDateString(undefined, { dateStyle: 'medium' }),
+      };
+    })
+    .sort((a, b) => a.timeMs - b.timeMs);
+}
+
+export function dailyMediansToChartRows(points: DailyMedianPoint[]): MedianChartRow[] {
+  return points.map((p) => ({
+    timeMs: p.timeMs,
+    depth: p.medianDepth,
+    label: p.label,
+    sampleCount: p.sampleCount,
+  }));
+}
+
+export type NonPumpRangePreset = 'week' | 'month' | 'months3';
+
+export function rangeDaysForPreset(preset: NonPumpRangePreset): number {
+  if (preset === 'week') return 7;
+  if (preset === 'month') return 30;
+  return 90;
+}
+
+export function filterHistoryForNonPumpRange(
+  history: SensorHistoryPoint[],
+  preset: NonPumpRangePreset,
+  anchorMs: number = Date.now(),
+): SensorHistoryPoint[] {
+  const sinceMs = anchorMs - rangeDaysForPreset(preset) * 24 * 60 * 60 * 1000;
+  return history
+    .filter((p) => Number.isFinite(p.timestamp) && p.timestamp >= sinceMs)
+    .sort((a, b) => a.timestamp - b.timestamp);
+}
+
+export type NonPumpDepthSummary = {
+  currentDepth: number;
+  minDepth: number;
+  maxDepth: number;
+};
+
+/** Headline metrics for non-pump trend charts — min/max from daily medians in the selected range. */
+export function summarizeNonPumpDepthRange(
+  history: SensorHistoryPoint[],
+  sinceMs: number,
+  latestDepth: number,
+): NonPumpDepthSummary {
+  const inRange = history
+    .filter((p) => Number.isFinite(p.timestamp) && p.timestamp >= sinceMs)
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  const daily = computeDailyMedianDepths(history, sinceMs);
+  const currentDepth =
+    inRange.length > 0 ? inRange[inRange.length - 1]!.depth : latestDepth;
+
+  if (daily.length > 0) {
+    const depths = daily.map((d) => d.medianDepth);
+    return {
+      currentDepth: Math.round(currentDepth * 100) / 100,
+      minDepth: Math.round(Math.min(...depths) * 100) / 100,
+      maxDepth: Math.round(Math.max(...depths) * 100) / 100,
+    };
+  }
+
+  if (inRange.length > 0) {
+    const depths = inRange.map((p) => p.depth);
+    return {
+      currentDepth: Math.round(currentDepth * 100) / 100,
+      minDepth: Math.round(Math.min(...depths) * 100) / 100,
+      maxDepth: Math.round(Math.max(...depths) * 100) / 100,
+    };
+  }
+
+  const rounded = Math.round(latestDepth * 100) / 100;
+  return { currentDepth: rounded, minDepth: rounded, maxDepth: rounded };
+}

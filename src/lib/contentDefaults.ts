@@ -19,6 +19,15 @@ export type HomeDashboardAlert = { tone: 'danger' | 'success'; text: string };
 export type HomeImpactMetric = { label: string; value: string; note: string };
 export type HomeActionableInsight = { title: string; description: string };
 
+export type HomeDashboardGraphCard = {
+  title: string;
+  description: string;
+  imageUrl: string;
+};
+
+export const IWA_DIGITAL_WATER_SUMMIT_CERTIFICATE_TITLE =
+  'Invitation to Present at the InnoHub – IWA Digital Water Summit 2026';
+
 export type HomeDashboardContent = {
   kicker: string;
   heading: string;
@@ -32,6 +41,8 @@ export type HomeDashboardContent = {
   mapImageUrl: string;
   mapChips: string[];
   screenshotsCsv: string;
+  /** Four preview graphs in the Dashboard / "What users see" section on Home. */
+  graphCards: HomeDashboardGraphCard[];
   impactMetrics: HomeImpactMetric[];
   actionableInsights: HomeActionableInsight[];
 };
@@ -54,7 +65,7 @@ export type HomeDeploymentsContent = {
   showMoreLabel: string;
 };
 
-export type HomeValidationCard = { title: string; detail: string };
+export type HomeValidationCard = { title: string; detail: string; mediaUrl?: string };
 export type HomeTestimonial = { name: string; role: string; quote: string };
 export type HomeValidationContent = {
   kicker: string;
@@ -186,7 +197,29 @@ export function getDefaultHomeContent(): HomeContent {
       mapBadge: '5 sensors',
       mapImageUrl: '/interactive-map.png',
       mapChips: ['📍 Layer: Sensor', '🌐 Layer: Network', '🔍 Drill-down modal'],
-      screenshotsCsv: '/1.png, /graph.png',
+      screenshotsCsv: '',
+      graphCards: [
+        {
+          title: 'Groundwater Level Trend',
+          description: 'Daily median depth for non-pump installations over 7 days, 1 month, or 3 months.',
+          imageUrl: '',
+        },
+        {
+          title: '24-hour Pump Drawdown',
+          description: 'Depth change during each pump run for pump-connected borewells.',
+          imageUrl: '',
+        },
+        {
+          title: 'Interactive Sensor Map',
+          description: 'Live device locations with depth and status at a glance.',
+          imageUrl: '',
+        },
+        {
+          title: 'Depth History & Export',
+          description: 'Timestamped readings table and CSV export for any device.',
+          imageUrl: '',
+        },
+      ],
       impactMetrics: [
         { label: 'Wells Monitored', value: '5', note: 'Connected to the live sensor network' },
         { label: 'Villages Reached', value: '3', note: 'Pilot geographies currently active' },
@@ -248,29 +281,15 @@ export function getDefaultHomeContent(): HomeContent {
       heading: 'Certificates, LORs & endorsements',
       description: 'Build trust with proof: calibration notes, validation letters, certificates, and press mentions.',
       cards: [
-        { title: 'Certificate of validation', detail: 'Upload PDF/image thumbnail with links' },
-        { title: 'Letters of recommendation', detail: 'Add LOR snippets with names/designations' },
-        { title: 'Awards / media / partners', detail: 'Showcase logos + one-line context' },
+        {
+          title: IWA_DIGITAL_WATER_SUMMIT_CERTIFICATE_TITLE,
+          detail: 'Official invitation to present JalYantra at the IWA Digital Water Summit 2026.',
+          mediaUrl: '',
+        },
       ],
       testimonialsHeading: 'Trusted by field partners',
-      testimonialsDescription: 'Replace these placeholders with real names, roles, and short quotes.',
-      testimonials: [
-        {
-          name: 'Farmer (Village)',
-          role: 'Borewell owner · Maharashtra',
-          quote: 'The alerts helped us avoid running the motor when the water level dropped suddenly.',
-        },
-        {
-          name: 'NGO field coordinator',
-          role: 'Partner NGO · Maharashtra',
-          quote: 'The dashboard made it easier to explain groundwater changes during community meetings.',
-        },
-        {
-          name: 'Advisor / Validator',
-          role: 'Hydrology / Program',
-          quote: 'Village-level time-series data like this can improve planning and accountability.',
-        },
-      ],
+      testimonialsDescription: '',
+      testimonials: [],
     },
     contact: {
       kicker: 'Contact',
@@ -420,6 +439,7 @@ export function mergeHomeContentWithDefaults(value: unknown): HomeContent {
       alerts: arrOr(defaults.dashboard.alerts, dashboardOverrides['alerts']),
       mapChips: arrOr(defaults.dashboard.mapChips, dashboardOverrides['mapChips']),
       impactMetrics: arrOr(defaults.dashboard.impactMetrics, dashboardOverrides['impactMetrics']),
+      graphCards: arrOr(defaults.dashboard.graphCards, dashboardOverrides['graphCards']),
       actionableInsights: arrOr(defaults.dashboard.actionableInsights, dashboardOverrides['actionableInsights']),
     } as HomeDashboardContent,
     deployments: {

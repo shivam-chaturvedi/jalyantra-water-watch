@@ -5,7 +5,7 @@ import {
   Eye, Home, BarChart2, Film, MapPin, Upload,
   Plus, Trash2, Video, LogOut, ExternalLink,
   CheckCircle2, Menu, X, Camera, FileText,
-  ChevronDown, ChevronUp, Settings,
+  ChevronDown, ChevronUp, Settings, Signal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -28,11 +28,16 @@ import {
   setDeployment,
   deleteDeployment,
   uploadFileToBucket,
+  fetchAllDeviceMasterData,
+  upsertDeviceMasterData,
+  deleteDeviceMasterData,
   type SiteFlagKey,
   type DeploymentRecord,
+  type DeviceMasterData,
 } from '@/lib/siteAdmin';
 import {
   mergeHomeContentWithDefaults,
+  IWA_DIGITAL_WATER_SUMMIT_CERTIFICATE_TITLE,
 } from '@/lib/contentDefaults';
 import { 
   resolveImageSrc, 
@@ -40,7 +45,7 @@ import {
   extractDriveFileId,
   toDriveStreamUrl
 } from '@/lib/driveLinks';
-import { ZoomableImage } from '@/components/ImageModalContext';
+import { useLiveDevices } from '@/hooks/useLiveDevices';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,6 +58,7 @@ type AdminSection =
   | 'contact'
   | 'deployments-preview'
   | 'deployments-page'
+  | 'devices'
   | 'media';
 
 type Installation = { title: string; videoUrl: string; notes: string; mediaCsv?: string };
@@ -72,6 +78,7 @@ const SIDEBAR_ITEMS: Array<{
   { id: 'validation', icon: FileText, label: 'Validation Section', desc: 'Certificates + testimonials' },
   { id: 'contact', icon: Settings, label: 'Contact Section', desc: 'Pilot CTA + form copy' },
   { id: 'deployments-page', icon: MapPin, label: 'Deployments Page', desc: 'Manage all entries & home preview' },
+  { id: 'devices', icon: Signal, label: 'Live Devices', desc: 'Pump vs non-pump per live device' },
   { id: 'media', icon: Upload, label: 'Media Upload', desc: 'Upload images, videos & PDFs' },
 ];
 
@@ -1066,6 +1073,7 @@ export default function AdminPage() {
       'contact',
       'deployments-preview',
       'deployments-page',
+      'devices',
       'media',
     ];
     return (allowed as string[]).includes(raw) ? (raw as AdminSection) : 'visibility';
@@ -1097,6 +1105,7 @@ export default function AdminPage() {
   const pagesQuery = useQuery({ queryKey: ['app_pages'], queryFn: fetchAppPages });
   const homeContentQuery = useQuery({ queryKey: ['site_content', 'home'], queryFn: () => fetchSiteContent('home') });
   const deploymentsQuery = useQuery({ queryKey: ['all_deployments'], queryFn: fetchAllDeployments });
+  const devicesQuery = useQuery({ queryKey: ['device_master_data'], queryFn: fetchAllDeviceMasterData });
 
   const flags = flagsQuery.data ?? {};
   const homeContent = mergeHomeContentWithDefaults(homeDraft ?? homeContentQuery.data ?? {}) as unknown as Record<string, unknown>;
@@ -1144,6 +1153,24 @@ export default function AdminPage() {
     onError: (err) => toast({ title: 'Delete failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' }),
   });
 
+  const saveDeviceMut = useMutation({
+    mutationFn: (patch: Parameters<typeof upsertDeviceMasterData>[0]) => upsertDeviceMasterData(patch),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['device_master_data'] });
+      toast({ title: 'Device saved' });
+    },
+    onError: (err) => toast({ title: 'Save failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' }),
+  });
+
+  const deleteDeviceMut = useMutation({
+    mutationFn: (deviceId: string) => deleteDeviceMasterData(deviceId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['device_master_data'] });
+      toast({ title: 'Device removed' });
+    },
+    onError: (err) => toast({ title: 'Delete failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' }),
+  });
+
   const createDeploymentMut = useMutation({
     mutationFn: ({ slug, title }: { slug: string; title: string }) =>
       setDeployment(slug, { title, data: {} }),
@@ -1158,7 +1185,7 @@ export default function AdminPage() {
   const isBusy =
     flagsQuery.isLoading || pagesQuery.isLoading || homeContentQuery.isLoading ||
     deploymentsQuery.isLoading || updateFlag.isPending || updatePageEnabled.isPending ||
-    saveHomeContent.isPending;
+    saveHomeContent.isPending || devicesQuery.isLoading || saveDeviceMut.isPending || deleteDeviceMut.isPending;
 
   const userLabel = useMemo(() => user?.email ?? user?.id ?? 'Admin', [user]);
 
@@ -1220,6 +1247,9 @@ export default function AdminPage() {
     : [];
   const actionableInsights: Array<{ title: string; description: string }> = Array.isArray(dashField('actionableInsights'))
     ? (dashField('actionableInsights') as Array<{ title: string; description: string }>)
+    : [];
+  const graphCards: Array<{ title: string; description: string; imageUrl?: string }> = Array.isArray(dashField('graphCards'))
+    ? (dashField('graphCards') as Array<{ title: string; description: string; imageUrl?: string }>)
     : [];
 
   const insightsCards: Array<{ title: string; description: string; icon?: string }> = Array.isArray(insightsField('cards'))
@@ -1898,68 +1928,88 @@ export default function AdminPage() {
                     </div>
                   </Card>
 
-                  {/* Dashboard screenshots */}
+                  {/* What users see — 4 preview graphs */}
                   <Card className="p-5">
                     <div className="mb-3 flex items-center justify-between">
                       <div>
-                        <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Dashboard screenshots</h3>
-                        <p className="text-xs text-muted-foreground">Screenshots shown beside the map card.</p>
+                        <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">What users see — preview graphs</h3>
+                        <p className="text-xs text-muted-foreground">
+                          Four dashboard screenshots shown in the Home page Dashboard section. Upload the new graph images here.
+                        </p>
                       </div>
                       <Button
                         type="button"
                         size="sm"
                         variant="outline"
-                        onClick={() => {
-                          const current = String(dashField('screenshotsCsv') ?? '').split(',').map((s) => s.trim());
-                          setDashField('screenshotsCsv', [...current, ''].join(', '));
-                        }}
-                        disabled={isBusy}
+                        onClick={() => setDashField('graphCards', [...graphCards, { title: '', description: '', imageUrl: '' }])}
+                        disabled={isBusy || graphCards.length >= 4}
                         className="text-teal-700 border-teal-300 hover:bg-teal-50 hover:text-teal-900"
                       >
-                        <Plus className="mr-1 h-3 w-3" /> Add screenshot
+                        <Plus className="mr-1 h-3 w-3" /> Add graph
                       </Button>
                     </div>
-                    {(() => {
-                      const csv = String(dashField('screenshotsCsv') ?? '').trim();
-                      const urls = csv ? csv.split(',').map((u) => u.trim()) : [];
-                      if (urls.length === 0) return (
-                        <div className="rounded-xl border-2 border-dashed border-border p-5 text-center text-sm text-muted-foreground">
-                          No screenshots yet. Click "Add screenshot" to upload one.
-                        </div>
-                      );
-                      return (
-                        <div className="grid gap-3 md:grid-cols-2">
-                          {urls.map((url, idx) => (
-                            <div key={idx} className="space-y-1">
-                              <MediaUploadField
-                                label={`Screenshot ${idx + 1}`}
-                                value={url}
-                                onChange={(newUrl) => {
-                                  const updated = urls.map((u, i) => i === idx ? newUrl : u);
-                                  setDashField('screenshotsCsv', updated.join(', '));
-                                }}
-                                bucket="site-media"
-                                folder="screenshots"
-                                mediaType="image"
+                    {graphCards.length === 0 ? (
+                      <div className="rounded-xl border-2 border-dashed border-border p-5 text-center text-sm text-muted-foreground">
+                        No graph cards yet. Click &quot;Add graph&quot; to create up to four preview images.
+                      </div>
+                    ) : (
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {graphCards.map((card, idx) => (
+                          <Card key={idx} className="p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <Badge variant="outline" className="text-xs">Graph {idx + 1}</Badge>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="text-red-500 hover:text-red-600 h-6 w-6 p-0"
+                                onClick={() => setDashField('graphCards', graphCards.filter((_, i) => i !== idx))}
                                 disabled={isBusy}
-                              />
-                              <div className="flex justify-end">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-red-500 hover:text-red-600 text-xs"
-                                  onClick={() => setDashField('screenshotsCsv', urls.filter((_, i) => i !== idx).join(', '))}
-                                  disabled={isBusy}
-                                >
-                                  <Trash2 className="mr-1 h-3 w-3" /> Remove
-                                </Button>
-                              </div>
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
                             </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
+                            <Input
+                              placeholder="Graph title"
+                              value={card.title}
+                              onChange={(e) =>
+                                setDashField(
+                                  'graphCards',
+                                  graphCards.map((c, i) => (i === idx ? { ...c, title: e.target.value } : c)),
+                                )
+                              }
+                              disabled={isBusy}
+                            />
+                            <Textarea
+                              placeholder="Short description"
+                              value={card.description}
+                              onChange={(e) =>
+                                setDashField(
+                                  'graphCards',
+                                  graphCards.map((c, i) => (i === idx ? { ...c, description: e.target.value } : c)),
+                                )
+                              }
+                              disabled={isBusy}
+                              rows={2}
+                            />
+                            <MediaUploadField
+                              label="Graph image"
+                              value={card.imageUrl ?? ''}
+                              onChange={(url) =>
+                                setDashField(
+                                  'graphCards',
+                                  graphCards.map((c, i) => (i === idx ? { ...c, imageUrl: url } : c)),
+                                )
+                              }
+                              bucket="site-media"
+                              folder="dashboard-graphs"
+                              mediaType="image"
+                              disabled={isBusy}
+                            />
+                          </Card>
+                        ))}
+                      </div>
+                    )}
                   </Card>
 
                   <Card className="p-5 space-y-4">
@@ -2116,7 +2166,12 @@ export default function AdminPage() {
 
                   <Card className="p-5 space-y-4">
                     <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Validation cards</h3>
+                      <div>
+                        <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Validation cards</h3>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Home page shows only: &quot;{IWA_DIGITAL_WATER_SUMMIT_CERTIFICATE_TITLE}&quot;
+                        </p>
+                      </div>
                       <Button
                         type="button"
                         size="sm"
@@ -2604,6 +2659,16 @@ export default function AdminPage() {
               </div>
             )}
 
+            {/* ── Section: Device Master Data ───────────────────────────── */}
+            {activeSection === 'devices' && (
+              <DeviceMasterSection
+                devices={devicesQuery.data ?? []}
+                masterLoading={devicesQuery.isLoading}
+                busy={saveDeviceMut.isPending || deleteDeviceMut.isPending}
+                onSave={(patch) => saveDeviceMut.mutate(patch)}
+              />
+            )}
+
             {/* ── Section: Media Upload ──────────────────────────────────── */}
             {activeSection === 'media' && (
               <div>
@@ -2618,6 +2683,169 @@ export default function AdminPage() {
           </div>
         </main>
       </div>
+    </div>
+  );
+}
+
+// ─── Live devices — pump / non-pump control ───────────────────────────────────
+
+type DeviceInstallType = 'pump' | 'non-pump';
+
+function DeviceMasterSection({
+  devices,
+  masterLoading,
+  busy,
+  onSave,
+}: {
+  devices: DeviceMasterData[];
+  masterLoading: boolean;
+  busy: boolean;
+  onSave: (patch: Parameters<typeof upsertDeviceMasterData>[0]) => void;
+}) {
+  const { sensors: liveSensors, isLoading: liveLoading, error: liveError, refresh } = useLiveDevices();
+  const loading = masterLoading || liveLoading;
+
+  const masterById = useMemo(() => new Map(devices.map((d) => [d.device_id, d])), [devices]);
+  const liveById = useMemo(() => new Map(liveSensors.map((s) => [s.deviceId, s])), [liveSensors]);
+
+  const deviceRows = useMemo(() => {
+    const ids = new Set([...liveById.keys(), ...masterById.keys()]);
+    return Array.from(ids)
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+      .map((deviceId) => {
+        const live = liveById.get(deviceId);
+        const master = masterById.get(deviceId);
+        const isPumpConnected = master ? master.is_pump_connected !== false : true;
+        return {
+          deviceId,
+          district: live?.district ?? '—',
+          depth: live?.depth,
+          status: live?.status,
+          isLive: Boolean(live),
+          isPumpConnected,
+          installType: (isPumpConnected ? 'pump' : 'non-pump') as DeviceInstallType,
+          hasSavedFlag: Boolean(master),
+        };
+      });
+  }, [liveById, masterById]);
+
+  const handleInstallTypeChange = (deviceId: string, installType: DeviceInstallType) => {
+    onSave({
+      device_id: deviceId,
+      is_pump_connected: installType === 'pump',
+    });
+  };
+
+  return (
+    <div>
+      <SectionHeader
+        title="Live Devices"
+        desc="Every device reporting from Firebase appears below. Set each one to pump-connected or non-pump — the dashboard charts update immediately after you save."
+      />
+
+      <Card className="mb-5 p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              {liveSensors.length} live device{liveSensors.length === 1 ? '' : 's'} in Firebase
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Pump-connected → 24h drawdown charts. Non-pump → daily median groundwater trend.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => refresh()} disabled={liveLoading || busy}>
+            Refresh list
+          </Button>
+        </div>
+        {liveError && (
+          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            Could not load live devices: {liveError}
+          </p>
+        )}
+      </Card>
+
+      {loading && (
+        <div className="py-8 text-center text-sm text-muted-foreground">Loading devices from Firebase and settings…</div>
+      )}
+
+      {!loading && deviceRows.length === 0 && (
+        <div className="rounded-xl border-2 border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+          No devices found in Firebase yet. Devices appear here automatically once they start sending data.
+        </div>
+      )}
+
+      {!loading && deviceRows.length > 0 && (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/30 text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-3 font-semibold">Device ID</th>
+                  <th className="px-4 py-3 font-semibold">District</th>
+                  <th className="px-4 py-3 font-semibold tabular-nums">Depth</th>
+                  <th className="px-4 py-3 font-semibold">Live</th>
+                  <th className="px-4 py-3 font-semibold">Installation type</th>
+                  <th className="px-4 py-3 font-semibold">Dashboard charts</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deviceRows.map((row) => (
+                  <tr key={row.deviceId} className="border-b border-border/60 hover:bg-muted/10">
+                    <td className="px-4 py-3 font-mono font-semibold text-foreground">{row.deviceId}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{row.district}</td>
+                    <td className="px-4 py-3 tabular-nums">
+                      {row.depth != null ? `${row.depth}m` : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          'text-[10px] uppercase',
+                          row.status === 'active'
+                            ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                            : row.isLive
+                              ? 'border-amber-300 bg-amber-50 text-amber-700'
+                              : 'border-border text-muted-foreground',
+                        )}
+                      >
+                        {row.isLive ? (row.status === 'active' ? 'Active' : 'Offline') : 'Not in Firebase'}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Select
+                        value={row.installType}
+                        onValueChange={(value) =>
+                          handleInstallTypeChange(row.deviceId, value as DeviceInstallType)
+                        }
+                        disabled={busy}
+                      >
+                        <SelectTrigger className="h-9 w-[11rem]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="z-[70]">
+                          <SelectItem value="pump">Pump connected</SelectItem>
+                          <SelectItem value="non-pump">Non-pump</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                      {row.isPumpConnected ? '24h pump drawdown' : 'Daily median trend'}
+                      {!row.hasSavedFlag && (
+                        <span className="mt-0.5 block text-[10px] text-amber-600">Default (not saved yet)</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      <p className="mt-4 text-xs text-muted-foreground">
+        Changes save immediately to device master data. Refresh the dashboard to see updated charts. Run migration{' '}
+        <code className="rounded bg-muted px-1">008_add_pump_connected_flag.sql</code> on Supabase if the save fails.
+      </p>
     </div>
   );
 }

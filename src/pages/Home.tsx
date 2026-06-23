@@ -10,6 +10,7 @@ import { useLocation } from "react-router-dom";
 import { fetchDeployment, fetchSiteContent } from "@/lib/siteAdmin";
 import {
   mergeHomeContentWithDefaults,
+  IWA_DIGITAL_WATER_SUMMIT_CERTIFICATE_TITLE,
   type HomeDashboardAlert,
   type HomeDashboardStat,
   type HomeHeroContent,
@@ -135,6 +136,39 @@ export default function Home() {
   const deploymentsContent = homeContent.deployments;
   const validationContent = homeContent.validation;
   const contactContent = homeContent.contact;
+
+  const dashboardGraphCards = useMemo(() => {
+    const cmsCards = (dashboardContent.graphCards ?? []).filter((card) => card.imageUrl?.trim());
+    if (cmsCards.length > 0) {
+      return cmsCards.map((card) => ({
+        title: card.title,
+        desc: card.description,
+        img: resolveImageSrc(card.imageUrl),
+      }));
+    }
+
+    const urls = String(dashboardContent.screenshotsCsv ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const legacyTitles = [
+      'Groundwater Level Trend',
+      '24-hour Pump Drawdown',
+      'Interactive Sensor Map',
+      'Depth History & Export',
+    ];
+    return urls.map((img, index) => ({
+      title: legacyTitles[index] ?? `Dashboard view ${index + 1}`,
+      desc: '',
+      img: resolveImageSrc(img),
+    }));
+  }, [dashboardContent.graphCards, dashboardContent.screenshotsCsv]);
+
+  const visibleValidationCards = useMemo(() => {
+    return validationContent.cards.filter(
+      (card) => card.title.trim() === IWA_DIGITAL_WATER_SUMMIT_CERTIFICATE_TITLE,
+    );
+  }, [validationContent.cards]);
   const deploymentsPreview = deploymentsPreviewQuery.data?.data as
     | { previewVideoUrl?: string; previewImages?: unknown[] }
     | undefined;
@@ -534,15 +568,11 @@ Details: ${contactInfo.details}`,
 	              </div>
             </div>
 
+            {dashboardGraphCards.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-              {[
-                { title: "Depth Over Time", desc: "Track how groundwater depth changes daily across the monitoring period", img: "/graph.png" },
-                { title: "Pump Drawdown Chart", desc: "See depth drop during pump cycles and recovery after each run", img: "/graph.png" },
-                { title: "District Risk Overview", desc: "Compare average depth and risk level across all monitored districts", img: "/interactive-map.png" },
-                { title: "Monthly Extraction Trend", desc: "Visualise cumulative water drawn month-by-month for any device", img: "/graph.png" },
-              ].map((item) => (
+              {dashboardGraphCards.map((item) => (
                 <div
-                  key={item.title}
+                  key={item.title + item.img}
                   className="group relative overflow-hidden rounded-[28px] border border-teal-100 bg-card/70 shadow-sm hover:shadow-md transition-all"
                 >
                   <img
@@ -557,6 +587,7 @@ Details: ${contactInfo.details}`,
                 </div>
               ))}
             </div>
+            )}
 
           </section>
 
@@ -719,7 +750,7 @@ Details: ${contactInfo.details}`,
             </div>
           </section>
 
-	          {showValidationSection && (
+	          {showValidationSection && visibleValidationCards.length > 0 && (
 	            <section className="container mx-auto space-y-8 px-4" id="validation">
 	              <div className="space-y-2">
 	                <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">{validationContent.kicker}</p>
@@ -728,8 +759,9 @@ Details: ${contactInfo.details}`,
 	                  {validationContent.description}
 	                </p>
 	              </div>
+              {visibleValidationCards.length > 0 && (
               <div className="grid gap-4 md:grid-cols-3">
-                {validationContent.cards.map((card) => {
+                {visibleValidationCards.map((card) => {
                   const mediaUrl = card.mediaUrl || "";
                   const driveId = extractDriveFileId(mediaUrl);
                   const isImage = /\.(jpg|jpeg|png|gif|webp|svg|avif)(\?|$)/i.test(mediaUrl) || (driveId && !mediaUrl.includes('preview'));
@@ -779,27 +811,7 @@ Details: ${contactInfo.details}`,
                   );
                 })}
               </div>
-
-	              <div className="space-y-3">
-	                <h3 className="text-2xl font-semibold text-foreground">{validationContent.testimonialsHeading}</h3>
-	                <p className="text-sm text-muted-foreground">
-	                  {validationContent.testimonialsDescription}
-	                </p>
-	                <div className="grid gap-4 md:grid-cols-3">
-	                  {validationContent.testimonials.map((testimonial) => (
-	                    <div key={testimonial.name} className="rounded-[32px] border border-border bg-card/80 p-5">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-muted" />
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">{testimonial.name}</p>
-                          <p className="text-[11px] text-muted-foreground">{testimonial.role}</p>
-                        </div>
-                      </div>
-                      <p className="mt-3 text-sm text-muted-foreground">“{testimonial.quote}”</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              )}
             </section>
           )}
 

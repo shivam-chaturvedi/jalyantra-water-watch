@@ -1,4 +1,4 @@
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { FullScreenLoader } from './FullScreenLoader';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -8,13 +8,14 @@ type ProtectedRouteProps = {
 
 export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { initializing, user, isAdmin } = useAuth();
+  const location = useLocation();
 
   if (initializing) {
     return <FullScreenLoader />;
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
   if (!isAdmin) {

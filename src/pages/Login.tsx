@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,8 +9,10 @@ const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
-  const { logIn, actionLoading, error, clearError } = useAuth();
+  const { logIn, actionLoading, error, clearError, user, isAdmin, initializing } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: string } | null)?.from ?? '/admin';
 
   useEffect(() => {
     clearError();
@@ -18,6 +20,12 @@ const LoginPage = () => {
       clearError();
     };
   }, [clearError]);
+
+  useEffect(() => {
+    if (!initializing && user && isAdmin) {
+      navigate(from, { replace: true });
+    }
+  }, [initializing, user, isAdmin, navigate, from]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -30,7 +38,7 @@ const LoginPage = () => {
 
     try {
       await logIn(email, password);
-      navigate('/', { replace: true });
+      navigate('/admin', { replace: true });
     } catch {
       // Error message is surfaced from context
     }

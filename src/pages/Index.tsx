@@ -7,7 +7,7 @@ import { DistrictPanel } from '@/components/DistrictPanel';
 import { SensorDetailModal } from '@/components/SensorDetailModal';
 import { Footer } from '@/components/Footer';
 import { useGroundwaterData } from '@/hooks/useGroundwaterData';
-import { SensorReading, District, Alert, sensorsDashboardExportRows } from '@/lib/data';
+import { SensorReading, District, Alert, sensorsDashboardExportRows, isPumpConnectedDevice } from '@/lib/data';
 import { downloadDataAsCsv } from '@/lib/csv';
 import { SensorHistoryModal } from '@/components/SensorHistoryModal';
 import { motion } from 'framer-motion';
@@ -116,7 +116,7 @@ const Index = () => {
   }, []);
 
   const wellRows = useMemo(() => {
-    return filteredSensors.slice(0, 8).map((sensor) => ({
+    return filteredSensors.map((sensor) => ({
       well: sensor.deviceId,
       village: sensor.district,
       district: sensor.district,
@@ -134,13 +134,24 @@ const Index = () => {
       s.history.forEach((p) => { if (p.collectedDate) dateSet.add(p.collectedDate); });
     });
     const dates = Array.from(dateSet).sort().slice(-14);
-    const displaySensors = filteredSensors.slice(0, 5);
+    const displaySensors = filteredSensors;
     return dates.map((date) => {
       const row: Record<string, string | number> = { date };
       displaySensors.forEach((s) => {
         const pts = s.history.filter((p) => p.collectedDate === date);
         if (pts.length) {
-          row[s.deviceId] = Math.round((pts.reduce((sum, p) => sum + p.depth, 0) / pts.length) * 10) / 10;
+          const depths = pts.map((p) => p.depth);
+          if (isPumpConnectedDevice(s)) {
+            row[s.deviceId] = Math.round((depths.reduce((sum, p) => sum + p, 0) / depths.length) * 10) / 10;
+          } else {
+            const sorted = [...depths].sort((a, b) => a - b);
+            const mid = Math.floor(sorted.length / 2);
+            const median =
+              sorted.length % 2 === 1
+                ? sorted[mid]!
+                : (sorted[mid - 1]! + sorted[mid]!) / 2;
+            row[s.deviceId] = Math.round(median * 10) / 10;
+          }
         }
       });
       return row;
@@ -162,7 +173,7 @@ const Index = () => {
     return ticks;
   }, [depthTrendUpperBound]);
 
-  const chartColors = ['#0f766e', '#0ea5e9', '#f59e0b', '#ef4444', '#8b5cf6'];
+  const chartColors = ['#0f766e', '#0ea5e9', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#6366f1', '#ec4899', '#84cc16', '#f97316'];
 
   const handleExportAllSensors = useCallback(() => {
     if (!filteredSensors.length) return;
@@ -250,7 +261,7 @@ const Index = () => {
         <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
           <div>
             <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Depth Trends</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Groundwater depth over time — up to 5 devices, last 14 days, with a 2m baseline at the bottom of the axis</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Groundwater depth over time — all devices, last 14 days</p>
           </div>
         </div>
         {depthTrendData.length > 0 ? (
@@ -274,7 +285,7 @@ const Index = () => {
                     labelFormatter={(label: string) => `Date: ${label}`}
                   />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              {filteredSensors.slice(0, 5).map((s, i) => (
+              {filteredSensors.map((s, i) => (
                 <Line
                   key={s.deviceId}
                   type="monotone"
