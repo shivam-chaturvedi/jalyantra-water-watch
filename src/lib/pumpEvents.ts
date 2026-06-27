@@ -13,6 +13,115 @@ const Y_AXIS_PAD_M = 0.25;
 const Y_AXIS_MIN_SPAN_M = 0.5;
 
 const TWENTY_FOUR_H_MS = 24 * 60 * 60 * 1000;
+const FORTY_EIGHT_H_MS = 48 * 60 * 60 * 1000;
+
+export { TWENTY_FOUR_H_MS, FORTY_EIGHT_H_MS };
+
+export type PumpDrawdownRangePreset = '24h' | '48h';
+
+export function pumpDrawdownRangeHours(preset: PumpDrawdownRangePreset): number {
+  return preset === '24h' ? 24 : 48;
+}
+
+export function pumpDrawdownRangeLabel(preset: PumpDrawdownRangePreset): string {
+  return preset === '24h' ? '24-hour' : '48-hour';
+}
+
+/** Latest trustworthy sample instant for a sensor — used to anchor rolling windows. */
+export function getSensorReadingAnchorMs(sensor: {
+  history: SensorHistoryPoint[];
+  lastSync: string;
+}): number {
+  const historyMax = sensor.history.reduce(
+    (max, point) => Math.max(max, point.timestamp),
+    Number.NEGATIVE_INFINITY,
+  );
+  const syncMs = new Date(sensor.lastSync).getTime();
+  if (Number.isFinite(historyMax) && historyMax > 0) return historyMax;
+  if (Number.isFinite(syncMs)) return syncMs;
+  return Date.now();
+}
+
+export type RollingPumpWindow = {
+  anchorMs: number;
+  sinceMs: number;
+  points: SensorHistoryPoint[];
+  hours: number;
+};
+
+/** @deprecated Use RollingPumpWindow */
+export type Rolling24hWindow = RollingPumpWindow;
+
+/** Rolling pump window ending at the latest sample — 24h or 48h. */
+export function getRollingPumpWindow(
+  sensor: {
+    history: SensorHistoryPoint[];
+    depth: number;
+    collectedDate: string;
+    lastSync: string;
+    lastCollectedDateTime?: string;
+    latestRtdbExport?: RtdbCsvRow;
+  },
+  preset: PumpDrawdownRangePreset = '48h',
+): RollingPumpWindow {
+  const hours = pumpDrawdownRangeHours(preset);
+  const windowMs = hours * 60 * 60 * 1000;
+  const anchorMs = getSensorReadingAnchorMs(sensor);
+  const sinceMs = anchorMs - windowMs;
+  const fromHistory = sensor.history
+    .filter((p) => Number.isFinite(p.timestamp) && p.timestamp >= sinceMs && p.timestamp <= anchorMs)
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  if (fromHistory.length > 0) {
+    return { anchorMs, sinceMs, points: fromHistory, hours };
+  }
+
+  if (Number.isFinite(anchorMs) && anchorMs >= sinceMs) {
+    return {
+      anchorMs,
+      sinceMs,
+      hours,
+      points: [
+        {
+          id: `${anchorMs}-current`,
+          depth: sensor.depth,
+          collectedDate: sensor.collectedDate,
+          ...(sensor.lastCollectedDateTime?.trim()
+            ? { collectedDateTime: sensor.lastCollectedDateTime.trim() }
+            : {}),
+          timestamp: anchorMs,
+          ...(sensor.latestRtdbExport ? { rtdbExport: { ...sensor.latestRtdbExport } } : {}),
+        },
+      ],
+    };
+  }
+
+  return { anchorMs, sinceMs, points: [], hours };
+}
+
+/** Exactly 24 hours of readings ending at the latest sample — not wall-clock “now”. */
+export function getRolling24hWindow(sensor: {
+  history: SensorHistoryPoint[];
+  depth: number;
+  collectedDate: string;
+  lastSync: string;
+  lastCollectedDateTime?: string;
+  latestRtdbExport?: RtdbCsvRow;
+}): RollingPumpWindow {
+  return getRollingPumpWindow(sensor, '24h');
+}
+
+/** @deprecated Prefer getRolling24hWindow for explicit window bounds. */
+export function getPointsLast24h(sensor: {
+  history: SensorHistoryPoint[];
+  depth: number;
+  collectedDate: string;
+  lastSync: string;
+  lastCollectedDateTime?: string;
+  latestRtdbExport?: RtdbCsvRow;
+}): SensorHistoryPoint[] {
+  return getRolling24hWindow(sensor).points;
+}
 
 export function filterPointsSince(points: SensorHistoryPoint[], sinceMs: number): SensorHistoryPoint[] {
   return points
@@ -411,36 +520,7 @@ export function summarize24h(points: SensorHistoryPoint[]): Summary24h {
   };
 }
 
-/** History points in the last 24h, or a single synthetic point from the latest sync when in range. */
-export function getPointsLast24h(sensor: {
-  history: SensorHistoryPoint[];
-  depth: number;
-  collectedDate: string;
-  lastSync: string;
-  lastCollectedDateTime?: string;
-  latestRtdbExport?: RtdbCsvRow;
-}): SensorHistoryPoint[] {
-  const since = Date.now() - TWENTY_FOUR_H_MS;
-  const fromHistory = filterPointsSince(sensor.history, since);
-  if (fromHistory.length > 0) return fromHistory;
-
-  const lastMs = new Date(sensor.lastSync).getTime();
-  if (Number.isFinite(lastMs) && lastMs >= since) {
-    return [
-      {
-        id: `${sensor.lastSync}-current`,
-        depth: sensor.depth,
-        collectedDate: sensor.collectedDate,
-        ...(sensor.lastCollectedDateTime?.trim()
-          ? { collectedDateTime: sensor.lastCollectedDateTime.trim() }
-          : {}),
-        timestamp: lastMs,
-        ...(sensor.latestRtdbExport ? { rtdbExport: { ...sensor.latestRtdbExport } } : {}),
-      },
-    ];
-  }
-  return [];
-}
+/** History points in the last 24h ending at the latest reading (see getRolling24hWindow). */
 
 export function formatClockLabel(ms: number): string {
   const d = new Date(ms);

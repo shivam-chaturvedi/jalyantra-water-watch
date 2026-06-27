@@ -205,8 +205,8 @@ export function getDefaultHomeContent(): HomeContent {
           imageUrl: '',
         },
         {
-          title: '24-hour Pump Drawdown',
-          description: 'Depth change during each pump run for pump-connected borewells.',
+          title: '48-hour Pump Drawdown',
+          description: 'Depth change during each pump run for pump-connected borewells (24h or 48h window).',
           imageUrl: '',
         },
         {

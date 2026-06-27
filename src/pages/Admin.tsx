@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/use-toast';
+import { ZoomableImage } from '@/components/ImageModalContext';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   fetchAppPages,
@@ -2750,7 +2751,7 @@ function DeviceMasterSection({
               {liveSensors.length} live device{liveSensors.length === 1 ? '' : 's'} in Firebase
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Pump-connected → 24h drawdown charts. Non-pump → daily median groundwater trend.
+              Pump-connected → 24h or 48h pump drawdown charts. Non-pump → daily median groundwater trend.
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={() => refresh()} disabled={liveLoading || busy}>
@@ -2829,7 +2830,7 @@ function DeviceMasterSection({
                       </Select>
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">
-                      {row.isPumpConnected ? '24h pump drawdown' : 'Daily median trend'}
+                      {row.isPumpConnected ? '24h / 48h pump drawdown' : 'Daily median trend'}
                       {!row.hasSavedFlag && (
                         <span className="mt-0.5 block text-[10px] text-amber-600">Default (not saved yet)</span>
                       )}

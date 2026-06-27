@@ -21,6 +21,8 @@ interface PumpDrawdownChartProps {
   rows: PumpChartRow[];
   segments?: PumpRunSegment[];
   className?: string;
+  /** When set, X-axis is clamped to this exact window (e.g. rolling 24h). */
+  xDomainMs?: [number, number];
 }
 
 const startColor = '#22c55e';
@@ -49,9 +51,10 @@ export function PumpDrawdownChart({
   rows,
   segments,
   className = 'h-56 sm:h-64',
+  xDomainMs,
 }: PumpDrawdownChartProps) {
-  const rangeMs = chartTimeRangeMs(rows);
-  const extent = chartTimeExtentMs(rows);
+  const rangeMs = xDomainMs ? xDomainMs[1] - xDomainMs[0] : chartTimeRangeMs(rows);
+  const extent = xDomainMs ?? chartTimeExtentMs(rows);
   const extentStartMs = extent?.[0];
   const baseDomain = computeDepthYAxisDomain(rows);
   const yTicks = buildDepthYTicks(baseDomain[0], baseDomain[1], 0.1);

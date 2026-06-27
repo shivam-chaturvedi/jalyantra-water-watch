@@ -22,7 +22,7 @@ import {
 } from "@/lib/driveLinks";
 import { ZoomableImage } from "@/components/ImageModalContext";
 import { FileText, PlayCircle, Video, Award } from "lucide-react";
-import { SiteMenu } from "@/components/SiteMenu";
+import { SiteNav } from "@/components/SiteNav";
 import { useGroundwaterData } from "@/hooks/useGroundwaterData";
 
 const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -153,7 +153,7 @@ export default function Home() {
       .filter(Boolean);
     const legacyTitles = [
       'Groundwater Level Trend',
-      '24-hour Pump Drawdown',
+      '48-hour Pump Drawdown',
       'Interactive Sensor Map',
       'Depth History & Export',
     ];
@@ -344,10 +344,8 @@ Details: ${contactInfo.details}`,
                 </p>
               </div>
             </a>
-            <div className="hidden md:flex flex-1 justify-center">
-              <SiteMenu />
-            </div>
-          <div className="ml-auto flex items-center gap-2">
+            <SiteNav />
+            <div className="flex items-center gap-2 shrink-0">
             <GoogleTranslateDropdown className="max-w-[120px] sm:max-w-[180px]" />
           </div>
           </div>

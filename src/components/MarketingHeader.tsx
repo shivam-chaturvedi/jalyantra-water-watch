@@ -1,7 +1,7 @@
 import { MouseEvent, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import GoogleTranslateDropdown from '@/components/GoogleTranslate';
-import { SiteMenu } from '@/components/SiteMenu';
+import { SiteNav } from '@/components/SiteNav';
 
 type MarketingHeaderProps = {
   centerLinks?: Array<{ label: string; href: string }>;
@@ -41,11 +41,9 @@ export function MarketingHeader({ centerLinks, showDashboardButton = true }: Mar
           </div>
         </a>
 
-        <div className="hidden md:flex flex-1 justify-center">
-          <SiteMenu />
-        </div>
+        <SiteNav />
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <GoogleTranslateDropdown className="max-w-[120px] sm:max-w-[180px]" />
         </div>
       </div>

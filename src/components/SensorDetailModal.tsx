@@ -15,13 +15,15 @@ import {
   buildPumpRunSegments,
   computeDailyMedianDepths,
   dailyMediansToChartRows,
-  getPointsLast24h,
+  getRollingPumpWindow,
+  pumpDrawdownRangeLabel,
   pumpRunSegmentsToChartRows,
   rangeDaysForPreset,
   segmentIntoPumpEvents,
   summarize24h,
   summarizeNonPumpDepthRange,
   type NonPumpRangePreset,
+  type PumpDrawdownRangePreset,
 } from '@/lib/pumpEvents';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -40,6 +42,7 @@ interface SensorDetailModalProps {
 
 export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: SensorDetailModalProps) {
   const [nonPumpRange, setNonPumpRange] = useState<NonPumpRangePreset>('month');
+  const [pumpRange, setPumpRange] = useState<PumpDrawdownRangePreset>('48h');
 
   const pumpConnected = sensor ? isPumpConnectedDevice(sensor) : true;
 
@@ -65,22 +68,64 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
     return summarizeNonPumpDepthRange(sensor.history, sinceMs, sensor.depth);
   }, [sensor, pumpConnected, nonPumpRange, latestTimestamp]);
 
+  const pumpChartData = useMemo(() => {
+    if (!sensor || !pumpConnected) {
+      return {
+        rolling: null,
+        points: [] as ReturnType<typeof getRollingPumpWindow>['points'],
+        segments: [] as ReturnType<typeof buildPumpRunSegments>,
+        chartRows: [] as ReturnType<typeof pumpRunSegmentsToChartRows>,
+        summary: { currentWaterLevel: null, pumpRuns: 0, maxDrawdown: 0, avgDrawdownRate: 0, runsWithDuration: 0 },
+        xDomain: [0, 0] as [number, number],
+        rangeLabel: pumpDrawdownRangeLabel(pumpRange),
+        hours: pumpRange === '24h' ? 24 : 48,
+      };
+    }
+
+    const rolling = getRollingPumpWindow(sensor, pumpRange);
+    const points = rolling.points;
+    const segments = buildPumpRunSegments(segmentIntoPumpEvents(points));
+    const chartRows = pumpRunSegmentsToChartRows(segments);
+    const summary = summarize24h(points);
+
+    return {
+      rolling,
+      points,
+      segments,
+      chartRows,
+      summary,
+      xDomain: [rolling.sinceMs, rolling.anchorMs] as [number, number],
+      rangeLabel: pumpDrawdownRangeLabel(pumpRange),
+      hours: rolling.hours,
+    };
+  }, [sensor, pumpConnected, pumpRange]);
+
   if (!sensor) return null;
 
   const risk = getDepthRiskLevel(sensor.depth);
-  const points24h = getPointsLast24h(sensor);
-  const pumpEvents24h = segmentIntoPumpEvents(points24h);
-  const pumpSegments24h = buildPumpRunSegments(pumpEvents24h);
-  const chartRows24h = pumpRunSegmentsToChartRows(pumpSegments24h);
-  const summary24h = summarize24h(points24h);
-  const hasReadingsIn24h = points24h.length > 0;
+  const {
+    points: points24h,
+    segments: pumpSegments24h,
+    chartRows: chartRows24h,
+    summary: summary24h,
+    xDomain: pumpChartXDomain,
+    rangeLabel: pumpRangeLabel,
+    hours: pumpRangeHours,
+    rolling: rollingPump,
+  } = pumpChartData;
+  const hasReadingsInWindow = points24h.length > 0;
   const currentLevelDisplay =
     summary24h.currentWaterLevel !== null ? summary24h.currentWaterLevel : sensor.depth;
-  const has24hChartData = chartRows24h.some((r) => r.depth !== null);
+  const hasPumpChartData = chartRows24h.some((r) => r.depth !== null);
   const hasNonPumpChartData = nonPumpMedianRows.length > 0;
   const lastSyncLabel = formatLastSyncDate(sensor);
   const validationNotes = sensor.validationFlags ?? [];
-
+  const windowEndLabel = rollingPump
+    ? new Date(rollingPump.anchorMs).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    : '—';
+  const windowStartLabel = rollingPump
+    ? new Date(rollingPump.sinceMs).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    : '—';
   const handleDownloadHistory = () => {
     const rows =
       sensor.history.length > 0
@@ -207,25 +252,36 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
 
                 {pumpConnected ? (
                   <div className="jal-card">
-                    <div className="mb-4 space-y-2">
+                    <div className="mb-4 space-y-3">
                       <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                         <h3 className="font-semibold text-sm text-foreground flex items-center gap-2">
                           <BarChart3 className="w-4 h-4 text-accent" />
-                          24-hour pump drawdown
+                          {pumpRangeLabel} pump drawdown
                         </h3>
                         <span className="text-[11px] text-muted-foreground leading-snug max-w-md text-left">
-                          Green dots show the reading when the pump starts; red dots show the reading when the pump stops.
-                          A connector line links each start and stop pair so one pump run is easy to read.
+                          Green dots = pump start; red dots = pump stop. Window: {windowStartLabel} → {windowEndLabel} ({pumpRangeHours} hours).
                         </span>
                       </div>
+                      <Select
+                        value={pumpRange}
+                        onValueChange={(value) => setPumpRange(value as PumpDrawdownRangePreset)}
+                      >
+                        <SelectTrigger className="h-9 max-w-xs rounded-lg">
+                          <SelectValue placeholder="Select range" />
+                        </SelectTrigger>
+                        <SelectContent className="z-[70]">
+                          <SelectItem value="24h">Last 24 hours</SelectItem>
+                          <SelectItem value="48h">Last 48 hours</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-center">
                           <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Current depth</p>
                           <p className="text-sm font-bold text-foreground tabular-nums">
                             {currentLevelDisplay}m
-                            {!hasReadingsIn24h && (
+                            {!hasReadingsInWindow && (
                               <span className="block text-[10px] font-normal text-muted-foreground normal-case">
-                                No samples in 24h
+                                No samples in {pumpRangeHours}h
                               </span>
                             )}
                           </p>
@@ -251,11 +307,15 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
                       </div>
                     </div>
                     <div className="w-full">
-                      {has24hChartData ? (
-                        <PumpDrawdownChart rows={chartRows24h} segments={pumpSegments24h} />
+                      {hasPumpChartData ? (
+                        <PumpDrawdownChart
+                          rows={chartRows24h}
+                          segments={pumpSegments24h}
+                          xDomainMs={pumpChartXDomain}
+                        />
                       ) : (
                         <div className="flex h-full min-h-[14rem] items-center justify-center rounded-lg border border-dashed border-border bg-muted/10 px-4 text-center text-sm text-muted-foreground">
-                          No depth readings in the last 24 hours. Data appears only while the pump is powered on.
+                          No depth readings in the last {pumpRangeHours} hours. Data appears only while the pump is powered on.
                         </div>
                       )}
                     </div>
@@ -321,21 +381,6 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
                   </div>
                 )}
 
-                {validationNotes.length > 0 && (
-                  <div className="mt-3 rounded-lg border border-lime-500/40 bg-lime-50/80 p-3 text-[11px] text-lime-800">
-                    <p className="font-semibold text-xs text-lime-700">Data validation flags</p>
-                    <ul className="mt-1 space-y-1">
-                      {validationNotes.map((note, index) => (
-                        <li key={note + index} className="text-[11px]">
-                          • {note}
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="mt-1 text-[10px] text-lime-600">
-                      These flags trim implausible values and highlight sudden jumps to avoid misleading reporting.
-                    </p>
-                  </div>
-                )}
                 <div className="jal-card">
                   <h3 className="font-semibold text-sm text-foreground mb-3">Sensor Metadata</h3>
                   <div className="grid grid-cols-2 gap-3 text-sm">
