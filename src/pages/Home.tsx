@@ -592,7 +592,7 @@ Details: ${contactInfo.details}`,
           <section className="container mx-auto space-y-8 px-4">
             <div className="space-y-2">
               <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">Impact Metrics</p>
-              <h2 className="text-3xl font-bold text-foreground">What the program is reaching</h2>
+              <h2 className="text-3xl font-bold text-foreground">JalYantra in Numbers</h2>
               <p className="text-sm text-muted-foreground">
                 High-level outcomes for communities and the monitoring network.
               </p>
@@ -611,9 +611,9 @@ Details: ${contactInfo.details}`,
           <section className="container mx-auto space-y-8 px-4">
             <div className="space-y-2">
               <p className="text-xs uppercase tracking-[0.4em] text-[#0f9d7b]">Actionable Insights</p>
-              <h2 className="text-3xl font-bold text-foreground">What users see</h2>
+              <h2 className="text-3xl font-bold text-foreground">Monitor. Understand. Act.</h2>
               <p className="text-sm text-muted-foreground">
-                Eight ready-to-use insight cards — shown side by side, in two rows.
+                Real-time indicators that help monitor water availability, extraction, recovery, and groundwater trends.
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

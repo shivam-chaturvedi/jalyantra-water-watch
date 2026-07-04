@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ExternalLink, Mail, MessageSquare, Users } from 'lucide-react';
 import { MarketingHeader } from '@/components/MarketingHeader';
+import { ZoomableImage } from '@/components/ImageModalContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,6 +15,9 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from '@/components/ui/carousel';
+import { fetchSiteContent } from '@/lib/siteAdmin';
+import { mergePartnersContentWithDefaults } from '@/lib/contentDefaults';
+import { resolveImageSrc, toDrivePreviewUrl } from '@/lib/driveLinks';
 
 const stats = [
   { value: '1', label: 'Active Partner' },
@@ -21,7 +26,6 @@ const stats = [
   { value: 'Growing', label: 'Network' },
 ];
 
-const krushivikasPhotos = ['/1.png', '/graph.png', '/interactive-map.png', '/alerts.png'];
 
 const testimonialCards = [
   {
@@ -52,6 +56,17 @@ export default function PartnersPage() {
     interest: '',
     message: '',
   });
+
+  const partnersContentQuery = useQuery({
+    queryKey: ['site_content', 'partners'],
+    queryFn: () => fetchSiteContent('partners'),
+  });
+  const partnersContent = mergePartnersContentWithDefaults(partnersContentQuery.data ?? {});
+  const interviewVideoUrl = partnersContent.featuredPartner.interviewVideoUrl.trim();
+  const gallerySlots = Array.from({ length: 4 }, (_, idx) =>
+    (partnersContent.featuredPartner.galleryImages[idx] ?? '').trim(),
+  );
+  const drivePreview = interviewVideoUrl ? toDrivePreviewUrl(interviewVideoUrl) : null;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -138,11 +153,21 @@ export default function PartnersPage() {
               <section className="rounded-[28px] border border-border bg-muted/20 p-5">
                 <div className="overflow-hidden rounded-[24px] border border-border bg-black">
                   <div className="aspect-video bg-black">
-                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-teal-950 via-slate-950 to-black p-6 text-center">
-                      <div className="space-y-2">
-                        <p className="text-sm text-white/70">Replace with the interview video asset when it is ready.</p>
-                      </div>
-                    </div>
+                    {interviewVideoUrl ? (
+                      drivePreview ? (
+                        <iframe
+                          title="Krushi Vikas interview"
+                          src={drivePreview}
+                          className="h-full w-full"
+                          allow="autoplay; encrypted-media"
+                          allowFullScreen
+                        />
+                      ) : (
+                        <video className="h-full w-full object-cover" src={interviewVideoUrl} controls playsInline />
+                      )
+                    ) : (
+                      <div className="h-full w-full bg-gradient-to-br from-teal-950 via-slate-950 to-black" />
+                    )}
                   </div>
                 </div>
               </section>
@@ -151,16 +176,25 @@ export default function PartnersPage() {
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
               <section className="rounded-[28px] border border-border bg-muted/20 p-5">
                 <div className="grid grid-cols-2 gap-3">
-                  {krushivikasPhotos.map((src) => (
+                  {gallerySlots.map((src, idx) => (
                     <div
-                      key={src}
+                      key={`gallery-${idx}`}
                       className="aspect-[4/3] overflow-hidden rounded-[18px] border border-border bg-white"
                     >
-                      <img
-                        src="/placeholder.svg"
-                        alt="Placeholder visual"
-                        className="h-full w-full object-cover opacity-90"
-                      />
+                      {src ? (
+                        <ZoomableImage
+                          src={resolveImageSrc(src)}
+                          alt={`Krushi Vikas field photo ${idx + 1}`}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <img
+                          src="/placeholder.svg"
+                          alt=""
+                          className="h-full w-full object-cover opacity-90"
+                        />
+                      )}
                     </div>
                   ))}
                 </div>

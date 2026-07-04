@@ -5,7 +5,7 @@ import {
   Eye, Home, BarChart2, Film, MapPin, Upload,
   Plus, Trash2, Video, LogOut, ExternalLink,
   CheckCircle2, Menu, X, Camera, FileText,
-  ChevronDown, ChevronUp, Settings, Signal,
+  ChevronDown, ChevronUp, Settings, Signal, Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -35,9 +35,11 @@ import {
   type SiteFlagKey,
   type DeploymentRecord,
   type DeviceMasterData,
+  type StorageBucketName,
 } from '@/lib/siteAdmin';
 import {
   mergeHomeContentWithDefaults,
+  mergePartnersContentWithDefaults,
   IWA_DIGITAL_WATER_SUMMIT_CERTIFICATE_TITLE,
 } from '@/lib/contentDefaults';
 import { 
@@ -59,6 +61,7 @@ type AdminSection =
   | 'contact'
   | 'deployments-preview'
   | 'deployments-page'
+  | 'partners'
   | 'devices'
   | 'media';
 
@@ -79,6 +82,7 @@ const SIDEBAR_ITEMS: Array<{
   { id: 'validation', icon: FileText, label: 'Validation Section', desc: 'Certificates + testimonials' },
   { id: 'contact', icon: Settings, label: 'Contact Section', desc: 'Pilot CTA + form copy' },
   { id: 'deployments-page', icon: MapPin, label: 'Deployments Page', desc: 'Manage all entries & home preview' },
+  { id: 'partners', icon: Users, label: 'Partners Page', desc: 'Krushi Vikas video & photo gallery' },
   { id: 'devices', icon: Signal, label: 'Live Devices', desc: 'Pump vs non-pump per live device' },
   { id: 'media', icon: Upload, label: 'Media Upload', desc: 'Upload images, videos & PDFs' },
 ];
@@ -100,7 +104,7 @@ function VideoThumbnailPicker({
   videoUrl: string; 
   onCapture: (url: string) => void; 
   disabled?: boolean;
-  bucket?: 'site-media' | 'deployments-media';
+  bucket?: StorageBucketName;
 }) {
   const [capturing, setCapturing] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -189,7 +193,7 @@ interface MediaUploadFieldProps {
   value: string;
   onChange: (url: string) => void;
   onThumbnail?: (url: string) => void;
-  bucket?: 'site-media' | 'deployments-media';
+  bucket?: StorageBucketName;
   folder?: string;
   mediaType?: 'image' | 'video' | 'any';
   disabled?: boolean;
@@ -1074,6 +1078,7 @@ export default function AdminPage() {
       'contact',
       'deployments-preview',
       'deployments-page',
+      'partners',
       'devices',
       'media',
     ];
@@ -1100,17 +1105,21 @@ export default function AdminPage() {
 
   // Home content draft
   const [homeDraft, setHomeDraft] = useState<Record<string, unknown> | null>(null);
+  const [partnersDraft, setPartnersDraft] = useState<Record<string, unknown> | null>(null);
 
   // Data queries
   const flagsQuery = useQuery({ queryKey: ['site_flags'], queryFn: fetchSiteFlags });
   const pagesQuery = useQuery({ queryKey: ['app_pages'], queryFn: fetchAppPages });
   const homeContentQuery = useQuery({ queryKey: ['site_content', 'home'], queryFn: () => fetchSiteContent('home') });
+  const partnersContentQuery = useQuery({ queryKey: ['site_content', 'partners'], queryFn: () => fetchSiteContent('partners') });
   const deploymentsQuery = useQuery({ queryKey: ['all_deployments'], queryFn: fetchAllDeployments });
   const devicesQuery = useQuery({ queryKey: ['device_master_data'], queryFn: fetchAllDeviceMasterData });
 
   const flags = flagsQuery.data ?? {};
   const homeContent = mergeHomeContentWithDefaults(homeDraft ?? homeContentQuery.data ?? {}) as unknown as Record<string, unknown>;
   const homeDirty = homeDraft !== null;
+  const partnersContent = mergePartnersContentWithDefaults(partnersDraft ?? partnersContentQuery.data ?? {});
+  const partnersDirty = partnersDraft !== null;
 
   // Mutations
   const updateFlag = useMutation({
@@ -1131,6 +1140,16 @@ export default function AdminPage() {
       setHomeDraft(null);
       await queryClient.invalidateQueries({ queryKey: ['site_content', 'home'] });
       toast({ title: 'Home content saved' });
+    },
+    onError: (err) => toast({ title: 'Save failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' }),
+  });
+
+  const savePartnersContent = useMutation({
+    mutationFn: (data: Record<string, unknown>) => setSiteContent('partners', data),
+    onSuccess: async () => {
+      setPartnersDraft(null);
+      await queryClient.invalidateQueries({ queryKey: ['site_content', 'partners'] });
+      toast({ title: 'Partners content saved' });
     },
     onError: (err) => toast({ title: 'Save failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' }),
   });
@@ -2670,6 +2689,79 @@ export default function AdminPage() {
               />
             )}
 
+            {activeSection === 'partners' && (
+              <div>
+                <SectionHeader
+                  title="Partners Page"
+                  desc="Upload the Krushi Vikas interview video and the four engagement photos shown on the Partners page."
+                />
+                <Card className="p-5 space-y-5">
+                  <div className="flex items-center justify-between gap-3 border-b border-teal-100 pb-4">
+                    <div>
+                      <p className="text-sm font-semibold text-teal-900">Featured partner — Krushi Vikas</p>
+                      <p className="text-xs text-muted-foreground">Media appears in the collapsible partner section on /partners</p>
+                    </div>
+                    <SaveBar
+                      onSave={() => savePartnersContent.mutate(partnersContent as unknown as Record<string, unknown>)}
+                      onReset={() => setPartnersDraft(null)}
+                      saving={savePartnersContent.isPending}
+                      dirty={partnersDirty}
+                      className="static p-0 bg-transparent border-none shadow-none"
+                    />
+                  </div>
+
+                  <MediaUploadField
+                    label="Interview video"
+                    hint="Shown in the top-right video panel beside the Krushi Vikas description"
+                    value={partnersContent.featuredPartner.interviewVideoUrl}
+                    onChange={(url) =>
+                      setPartnersDraft({
+                        ...partnersContent,
+                        featuredPartner: { ...partnersContent.featuredPartner, interviewVideoUrl: url },
+                      })
+                    }
+                    bucket="partners-media"
+                    folder="krushi-vikas/video"
+                    mediaType="video"
+                    disabled={savePartnersContent.isPending}
+                  />
+
+                  <div className="space-y-3 border-t border-teal-100 pt-4">
+                    <FieldLabel
+                      label="Engagement photo gallery (4 slots)"
+                      hint="2×2 grid beside “Engagement with JalYantra” on the Partners page"
+                    />
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {partnersContent.featuredPartner.galleryImages.map((url, idx) => (
+                        <MediaUploadField
+                          key={idx}
+                          label={`Photo ${idx + 1}`}
+                          value={url}
+                          onChange={(nextUrl) => {
+                            const galleryImages = partnersContent.featuredPartner.galleryImages.map((item, i) =>
+                              i === idx ? nextUrl : item,
+                            );
+                            setPartnersDraft({
+                              ...partnersContent,
+                              featuredPartner: { ...partnersContent.featuredPartner, galleryImages },
+                            });
+                          }}
+                          bucket="partners-media"
+                          folder="krushi-vikas/gallery"
+                          mediaType="image"
+                          disabled={savePartnersContent.isPending}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Run migration <code className="rounded bg-muted px-1">009_partners_page_content.sql</code> on Supabase if uploads fail (creates the partners-media bucket).
+                  </p>
+                </Card>
+              </div>
+            )}
+
             {/* ── Section: Media Upload ──────────────────────────────────── */}
             {activeSection === 'media' && (
               <div>
@@ -2854,7 +2946,7 @@ function DeviceMasterSection({
 // ─── Media library section ────────────────────────────────────────────────────
 
 function MediaLibrarySection() {
-  const [bucket, setBucket] = useState<'site-media' | 'deployments-media'>('site-media');
+  const [bucket, setBucket] = useState<StorageBucketName>('site-media');
   const [recentUrls, setRecentUrls] = useState<Array<{ url: string; name: string; type: string }>>([]);
   const [uploading, setUploading] = useState(false);
 
@@ -2864,7 +2956,12 @@ function MediaLibrarySection() {
     try {
       for (const file of files) {
         const res = await uploadFileToBucket(bucket, file, {
-          folder: bucket === 'deployments-media' ? 'deployments' : 'site',
+          folder:
+            bucket === 'deployments-media'
+              ? 'deployments'
+              : bucket === 'partners-media'
+                ? 'partners'
+                : 'site',
         });
         setRecentUrls((prev) => [{ url: res.publicUrl, name: file.name, type: file.type }, ...prev]);
         toast({ title: 'Uploaded', description: file.name });
@@ -2889,13 +2986,14 @@ function MediaLibrarySection() {
       <Card className="p-5">
         <div className="mb-4">
           <FieldLabel label="Upload destination" hint="Choose which bucket to upload files into" />
-          <Select value={bucket} onValueChange={(v) => setBucket(v as 'site-media' | 'deployments-media')} disabled={uploading}>
+          <Select value={bucket} onValueChange={(v) => setBucket(v as StorageBucketName)} disabled={uploading}>
             <SelectTrigger className="w-64">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="site-media">site-media — Home page assets</SelectItem>
               <SelectItem value="deployments-media">deployments-media — Deployment assets</SelectItem>
+              <SelectItem value="partners-media">partners-media — Partners page assets</SelectItem>
             </SelectContent>
           </Select>
         </div>

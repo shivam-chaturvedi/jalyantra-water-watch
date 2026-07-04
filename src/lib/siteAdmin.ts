@@ -16,6 +16,8 @@ export type AppPage = {
   updated_at: string;
 };
 
+export type StorageBucketName = 'site-media' | 'deployments-media' | 'partners-media';
+
 export type MediaAsset = {
   id: string;
   bucket: string;

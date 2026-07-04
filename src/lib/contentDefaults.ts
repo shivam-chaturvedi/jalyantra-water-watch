@@ -111,6 +111,15 @@ export type HomeContent = {
   contact: HomeContactContent;
 };
 
+export type PartnersFeaturedPartnerContent = {
+  interviewVideoUrl: string;
+  galleryImages: string[];
+};
+
+export type PartnersContent = {
+  featuredPartner: PartnersFeaturedPartnerContent;
+};
+
 export type FooterContent = {
   brandTitle: string;
   brandSubtitle: string;
@@ -407,6 +416,35 @@ function arrOr<T>(fallback: T[], value: unknown): T[] {
 function obj(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   return value as Record<string, unknown>;
+}
+
+export function getDefaultPartnersContent(): PartnersContent {
+  return {
+    featuredPartner: {
+      interviewVideoUrl: '',
+      galleryImages: ['', '', '', ''],
+    },
+  };
+}
+
+export function mergePartnersContentWithDefaults(value: unknown): PartnersContent {
+  const overrides = obj(value);
+  const defaults = getDefaultPartnersContent();
+  const featuredOverrides = obj(overrides['featuredPartner']);
+  const gallery = featuredOverrides['galleryImages'];
+  const galleryImages = Array.isArray(gallery)
+    ? gallery.map((item) => String(item ?? '')).slice(0, 4)
+    : defaults.featuredPartner.galleryImages;
+  while (galleryImages.length < 4) galleryImages.push('');
+
+  return {
+    featuredPartner: {
+      ...defaults.featuredPartner,
+      ...featuredOverrides,
+      interviewVideoUrl: String(featuredOverrides['interviewVideoUrl'] ?? defaults.featuredPartner.interviewVideoUrl),
+      galleryImages,
+    },
+  };
 }
 
 export function mergeHomeContentWithDefaults(value: unknown): HomeContent {
