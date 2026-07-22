@@ -1,0 +1,4 @@
+project_id = "jalyantra-water-watch"
+
+[functions.sync-rtdb-to-supabase]
+verify_jwt = false
