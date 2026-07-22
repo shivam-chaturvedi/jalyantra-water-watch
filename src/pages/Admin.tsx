@@ -5,7 +5,7 @@ import {
   Eye, Home, BarChart2, Film, MapPin, Upload,
   Plus, Trash2, Video, LogOut, ExternalLink,
   CheckCircle2, Menu, X, Camera, FileText,
-  ChevronDown, ChevronUp, Settings, Signal, Users,
+  ChevronDown, ChevronUp, Settings, Signal, Users, Info,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
