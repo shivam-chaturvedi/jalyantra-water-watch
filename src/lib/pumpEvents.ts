@@ -294,20 +294,25 @@ export function buildPumpRunSegments(
   const windowSize = Math.min(5, Math.max(3, options?.windowSize ?? PUMP_CHART_MA_WINDOW));
   const displayStep = options?.displayStep ?? PUMP_CHART_DEPTH_DISPLAY_STEP;
   const segments: PumpRunSegment[] = [];
+
+  //made some changes here
   events.forEach((ev, idx) => {
     if (!ev.length) return;
     const { ev: evChart, smoothed } = smoothEventForChart(ev, windowSize, displayStep);
     if (!evChart.length) return;
     const startPoint = evChart[0];
-    const endPoint = evChart[evChart.length - 1];
+    // Used the RAW last point (not the trimmed chart point) so the displayed
+    // "End" time always matches the same window that durationMin measures.
+    const rawEndPoint = ev[ev.length - 1];
     const stats = statsForEvent(ev);
     segments.push({
       runIndex: idx + 1,
       startPoint,
-      endPoint,
+      endPoint: rawEndPoint,
       startLabel: chartPointLabel(startPoint),
-      endLabel: chartPointLabel(endPoint),
+      endLabel: chartPointLabel(rawEndPoint),
       startDepth: smoothed[0] as number,
+      // endDepth still reflects the trimmed/smoothed chart value for display consistency
       endDepth: smoothed[smoothed.length - 1] as number,
       drawdown: stats.drawdown,
       durationMin: stats.durationMin,
@@ -316,6 +321,7 @@ export function buildPumpRunSegments(
   });
   return segments;
 }
+
 
 export function pumpRunSegmentsToChartRows(segments: PumpRunSegment[]): PumpChartRow[] {
   const rows: PumpChartRow[] = [];
