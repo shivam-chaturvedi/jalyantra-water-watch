@@ -3475,7 +3475,7 @@ function MasterTablesSection() {
                     latitude: lat,
                     longitude: long,
                     status: 'Active',
-                  }, { onConflict: 'location_id' });
+                  }, { onConflict: 'location_id', ignoreDuplicates: true });
 
                   await supabase.from('well_master').upsert({
                     well_id: wellId,
@@ -3487,7 +3487,7 @@ function MasterTablesSection() {
                     pump_type: pumpType,
                     pump_intake_level_meters: pumpIntake,
                     status: 'Active',
-                  }, { onConflict: 'well_id' });
+                  }, { onConflict: 'well_id' , ignoreDuplicates: true});
 
                   await supabase.from('device_master').upsert({
                     device_id: deviceId,
@@ -3495,7 +3495,7 @@ function MasterTablesSection() {
                     device_serial_number: deviceId,
                     status: 'Active',
                     start_stop_method: 'automatic',
-                  }, { onConflict: 'device_id' });
+                  }, { onConflict: 'device_id' , ignoreDuplicates: true });
 
                   devCount++;
                 }
@@ -3584,14 +3584,15 @@ function MasterTablesSection() {
                   const wellDepth = wellDepthMap.get(wellId) || 20.0;
                   const wellDiameter = wellDiameterMap.get(wellId) || 1.5;
                   const wellArea = 3.14159265 * Math.pow(wellDiameter / 2, 2);
-
+                  
+                  const dailyExtractionHistory: number[] = [];
                   for (let i = 0; i < sortedDates.length; i++) {
                     const dateStr = sortedDates[i];
                     const depths = dateMap.get(dateStr)!.sort((a, b) => a - b);
                     const mid = Math.floor(depths.length / 2);
                     const medianDepth = depths.length % 2 !== 0 ? depths[mid] : (depths[mid - 1] + depths[mid]) / 2;
 
-                    const remainingDepth = Math.max(0, wellDepth - medianDepth);
+                    const remainingDepth = wellDepth - medianDepth; // can be negative — signals well is deeper than recorded depth
                     const remainingVolumeLiters = wellArea * remainingDepth * 1000.0;
                     const safetyBuffer = remainingDepth - 2.0; // 2m intake level
                     const dryRunRisk = safetyBuffer <= 1.0;
@@ -3630,7 +3631,9 @@ function MasterTablesSection() {
                     }
 
                     dailyWaterExtractionLiters = wellArea * totalDropMeters * 1000.0;
-
+                    dailyExtractionHistory.push(dailyWaterExtractionLiters);
+                    const last7 = dailyExtractionHistory.slice(-7);
+                    const avgSevenDayExtractionLiters = last7.reduce((a, b) => a + b, 0) / last7.length;
                     // Daily Well Summary (D)
                     await supabase.from('daily_well_summary').upsert({
                       well_id: wellId,
@@ -3642,7 +3645,7 @@ function MasterTablesSection() {
                       daily_water_level_drop_meters: totalDropMeters,
                       remaining_water_depth_meters: remainingDepth,
                       remaining_water_volume_liters: remainingVolumeLiters,
-                      estimated_days_remaining: remainingVolumeLiters / Math.max(1, dailyWaterExtractionLiters || 500.0),
+                      estimated_days_remaining: avgSevenDayExtractionLiters > 0 ? remainingVolumeLiters / avgSevenDayExtractionLiters : null,
                       updated_at: new Date().toISOString(),
                     }, { onConflict: 'well_id, date' });
 
