@@ -3503,7 +3503,7 @@ function MasterTablesSection() {
 
               // 2. Process Telemetry & Calculate All Summaries (B through J)
               if (readings && typeof readings === 'object') {
-                const wellReadingsByDate = new Map<string, Map<string, number[]>>();
+                const wellReadingsByDate = new Map<string, Map<string, { depth: number; timestampMs: number }[]>>();
                 const rawRowsToInsert: any[] = [];
 
                 for (const [batchKey, batchNode] of Object.entries(readings)) {
@@ -3551,7 +3551,7 @@ function MasterTablesSection() {
                     if (!wellReadingsByDate.has(wellId)) wellReadingsByDate.set(wellId, new Map());
                     const dateMap = wellReadingsByDate.get(wellId)!;
                     if (!dateMap.has(readingDate)) dateMap.set(readingDate, []);
-                    dateMap.get(readingDate)!.push(depth);
+                    dateMap.get(readingDate)!.push({depth, timestampMs: readingTimeMs });
                   }
                 }
 
@@ -3588,7 +3588,7 @@ function MasterTablesSection() {
                   const dailyExtractionHistory: number[] = [];
                   for (let i = 0; i < sortedDates.length; i++) {
                     const dateStr = sortedDates[i];
-                    const depths = dateMap.get(dateStr)!.sort((a, b) => a - b);
+                    const depths = dateMap.get(dateStr)!.map(r => r.depth).sort((a, b) => a - b);
                     const mid = Math.floor(depths.length / 2);
                     const medianDepth = depths.length % 2 !== 0 ? depths[mid] : (depths[mid - 1] + depths[mid]) / 2;
 
@@ -3607,18 +3607,19 @@ function MasterTablesSection() {
 
                     let inPumpRun = false;
                     for (let rIdx = 1; rIdx < rawReadingsList.length; rIdx++) {
-                      const prevDepth = rawReadingsList[rIdx - 1];
-                      const currDepth = rawReadingsList[rIdx];
-                      const diff = currDepth - prevDepth; // Increasing depth indicates pumping extraction
-
-                      if (diff >= 0.02) { // Sensitivity threshold (2cm depth increase)
+                      const prev = rawReadingsList[rIdx - 1];
+                      const curr = rawReadingsList[rIdx];
+                      const diff = curr.depth - prev.depth;
+                    
+                      if (diff >= 0.02) {
                         if (!inPumpRun) {
                           dailyPumpRunCount++;
                           inPumpRun = true;
                         }
-                        dailyPumpRuntimeMinutes += 10; // 10 minutes per active pumping sample
+                        const elapsedMinutes = (curr.timestampMs - prev.timestampMs) / 60000;
+                        dailyPumpRuntimeMinutes += Math.max(0, elapsedMinutes); // real elapsed time, not a flat guess
                         totalDropMeters += diff;
-                      } else if (diff < -0.02) { // Water level recovering
+                      } else if (diff < -0.02) {
                         inPumpRun = false;
                       }
                     }
@@ -3627,7 +3628,8 @@ function MasterTablesSection() {
                     if (dailyPumpRunCount === 0 && rawReadingsList.length > 3) {
                       dailyPumpRunCount = Math.min(3, Math.ceil(rawReadingsList.length / 10));
                       dailyPumpRuntimeMinutes = Math.min(240, rawReadingsList.length * 15);
-                      totalDropMeters = Math.max(0.1, (Math.max(...rawReadingsList) - Math.min(...rawReadingsList)));
+                      const depthValues = rawReadingsList.map(r => r.depth);
+                      totalDropMeters = Math.max(0.1, (Math.max(...depthValues) - Math.min(...depthValues)));
                     }
 
                     dailyWaterExtractionLiters = wellArea * totalDropMeters * 1000.0;
@@ -3668,7 +3670,7 @@ function MasterTablesSection() {
                     // Weekly/Monthly Well Summary (E)
                     if (i >= 7) {
                       const date7Ago = sortedDates[i - 7];
-                      const depth7Ago = dateMap.get(date7Ago)![0];
+                      const depth7Ago = dateMap.get(date7Ago)![0].depth;
                       const change7Days = medianDepth - depth7Ago;
 
                       await supabase.from('weekly_monthly_well_summary').upsert({
