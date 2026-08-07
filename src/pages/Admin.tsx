@@ -3584,6 +3584,63 @@ function MasterTablesSection() {
                   }
                 }
 
+                // 2.5. Detect Pump Runs from Raw Depth Readings & Insert into pump_run_summary (C)
+                // NOTE: This ADDS new rows only. It does not touch or delete any existing pump_run_summary rows.
+                for (const [wellId, dateMap] of wellReadingsByDate.entries()) {
+                  const wellDiameterForRuns = wellDiameterMap.get(wellId) || 1.5;
+                  const wellAreaForRuns = 3.14159265 * Math.pow(wellDiameterForRuns / 2, 2);
+
+                  for (const [dateStr, readings] of dateMap.entries()) {
+                    const sorted = [...readings].sort((a, b) => a.timestampMs - b.timestampMs);
+                    if (sorted.length < 2) continue;
+
+                    const runs: { startIdx: number; endIdx: number }[] = [];
+                    let runStart: number | null = null;
+                    for (let idx = 1; idx < sorted.length; idx++) {
+                      const diff = sorted[idx].depth - sorted[idx - 1].depth;
+                      if (diff >= 0.02) {
+                        if (runStart === null) runStart = idx - 1;
+                      } else {
+                        if (runStart !== null) {
+                          runs.push({ startIdx: runStart, endIdx: idx - 1 });
+                          runStart = null;
+                        }
+                      }
+                    }
+                    if (runStart !== null) {
+                      runs.push({ startIdx: runStart, endIdx: sorted.length - 1 });
+                    }
+
+                    if (runs.length === 0) continue;
+
+                    const rowsForDate = runs.map((run, idx) => {
+                      const startPoint = sorted[run.startIdx];
+                      const endPoint = sorted[run.endIdx];
+                      const drop = Math.max(0, endPoint.depth - startPoint.depth);
+                      const runtimeMinutes = Math.max(0, (endPoint.timestampMs - startPoint.timestampMs) / 60000);
+                      const extractionLiters = wellAreaForRuns * drop * 1000.0;
+                      return {
+                        well_id: wellId,
+                        run_date: dateStr,
+                        pump_start_time: new Date(startPoint.timestampMs).toISOString(),
+                        pump_stop_time: new Date(endPoint.timestampMs).toISOString(),
+                        pump_runtime_minutes: runtimeMinutes,
+                        pump_start_depth_meters: startPoint.depth,
+                        pump_stop_depth_meters: endPoint.depth,
+                        water_level_drop_during_run_meters: drop,
+                        pump_extraction_per_run_liters: extractionLiters,
+                        is_first_run_of_day: idx === 0,
+                        is_last_run_of_day: idx === runs.length - 1,
+                        updated_at: new Date().toISOString(),
+                      };
+                    });
+
+                    if (rowsForDate.length > 0) {
+                      await supabase.from('pump_run_summary').insert(rowsForDate);
+                    }
+                  }
+                }
+
                 // Pull real pump run data — this is the single source of truth for run counts/runtime/extraction
                 const { data: pumpRunRows } = await supabase.from('pump_run_summary').select('well_id, run_date, pump_runtime_minutes, pump_extraction_per_run_liters, water_level_drop_during_run_meters');
                 const pumpRunsByWellDate = new Map<string, { count: number; runtime: number; extraction: number; drop: number }>();
