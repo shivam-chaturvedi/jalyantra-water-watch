@@ -176,7 +176,7 @@ export function chartPointLabel(p: SensorHistoryPoint): string {
   if (dt) {
     const ms = Date.parse(dt);
     if (Number.isFinite(ms)) {
-      return new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      return new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata'  });
     }
     return dt;
   }
@@ -185,17 +185,17 @@ export function chartPointLabel(p: SensorHistoryPoint): string {
     if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
       const ms = Date.parse(`${raw}T12:00:00`);
       if (Number.isFinite(ms)) {
-        return new Date(ms).toLocaleDateString(undefined, { dateStyle: 'medium' });
+        return new Date(ms).toLocaleDateString(undefined, { dateStyle: 'medium', timeZone: 'Asia/Kolkata' });
       }
       return raw;
     }
     const ms = Date.parse(raw);
     if (Number.isFinite(ms)) {
-      return new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      return new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata'  });
     }
     return raw;
   }
-  return new Date(p.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  return new Date(p.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
 }
 
 /**
@@ -213,12 +213,12 @@ export function formatChartAxisTime(ms: number, rangeMs: number, extentStartMs?:
     start.getMonth() === d.getMonth() &&
     start.getDate() === d.getDate();
 
-  if (sameDay) return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  if (sameDay) return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
 
   // Multi-day or unknown: keep all ticks consistent, include day + time.
   // `rangeMs` is still passed for compatibility and future tweaks.
   void rangeMs;
-  return d.toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
 }
 
 function trailingMovingAverage(values: number[], windowSize: number): number[] {
@@ -531,7 +531,7 @@ export function summarize24h(points: SensorHistoryPoint[]): Summary24h {
 export function formatClockLabel(ms: number): string {
   const d = new Date(ms);
   if (isNaN(d.getTime())) return '';
-  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' , timeZone: 'Asia/Kolkata'});
 }
 
 export function chartTimeRangeMs(rows: { timeMs: number; depth: number | null }[]): number {
@@ -598,7 +598,7 @@ export function computeDailyMedianDepths(
         timeMs: noonMsForDateKey(date),
         medianDepth,
         sampleCount: depths.length,
-        label: new Date(noonMsForDateKey(date)).toLocaleDateString(undefined, { dateStyle: 'medium' }),
+        label: new Date(noonMsForDateKey(date)).toLocaleDateString(undefined, { dateStyle: 'medium', timeZone: 'Asia/Kolkata' }),
       };
     })
     .sort((a, b) => a.timeMs - b.timeMs);

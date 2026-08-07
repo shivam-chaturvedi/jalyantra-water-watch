@@ -93,7 +93,13 @@ const PLAUSIBLE_MS_MAX = Date.UTC(2038, 0, 1);
 
 function tryParseInstant(s: string | undefined): number | null {
   if (!s?.trim()) return null;
-  const t = Date.parse(s.trim());
+  let str = s.trim();
+  // If no timezone info is present, assume IST (+05:30) — this is where devices are installed
+  const hasTimezone = /Z$|[+-]\d{2}:?\d{2}$/.test(str);
+  if (!hasTimezone && /T/.test(str)) {
+    str = `${str}+05:30`;
+  }
+  const t = Date.parse(str);
   return Number.isNaN(t) ? null : t;
 }
 
@@ -257,7 +263,7 @@ export function formatLastSyncDate(
   if (iso) {
     const ms = Date.parse(iso);
     if (Number.isFinite(ms)) {
-      return new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      return new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
     }
     return iso;
   }
@@ -267,20 +273,20 @@ export function formatLastSyncDate(
     if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
       const ms = Date.parse(`${raw}T12:00:00`);
       if (Number.isFinite(ms)) {
-        return new Date(ms).toLocaleDateString(undefined, { dateStyle: 'medium' });
+        return new Date(ms).toLocaleDateString(undefined, { dateStyle: 'medium', timeZone: 'Asia/Kolkata' });
       }
       return raw;
     }
     const ms = Date.parse(raw);
     if (Number.isFinite(ms)) {
-      return new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      return new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
     }
     return raw;
   }
 
   const t = new Date(sensor.lastSync).getTime();
   if (Number.isFinite(t)) {
-    return new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    return new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata'  });
   }
 
   return '—';
@@ -578,7 +584,7 @@ function isPlausibleDepth(depth: number): boolean {
 }
 
 function formatTimeLabel(ms: number): string {
-  return new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
 }
 
 function detectSuddenAnomalies(points: ExtendedHistoryPoint[]): string[] {
