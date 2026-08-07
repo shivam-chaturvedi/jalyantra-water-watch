@@ -43,9 +43,9 @@ import {
   mergePartnersContentWithDefaults,
   IWA_DIGITAL_WATER_SUMMIT_CERTIFICATE_TITLE,
 } from '@/lib/contentDefaults';
-import { 
-  resolveImageSrc, 
-  toDrivePreviewUrl, 
+import {
+  resolveImageSrc,
+  toDrivePreviewUrl,
   extractDriveFileId,
   toDriveStreamUrl
 } from '@/lib/driveLinks';
@@ -77,18 +77,18 @@ const SIDEBAR_ITEMS: Array<{
   label: string;
   desc: string;
 }> = [
-  { id: 'visibility', icon: Eye, label: 'Visibility & Pages', desc: 'Toggle sections & enable routes' },
-  { id: 'hero', icon: Home, label: 'Hero Section', desc: 'Headline, tagline & media' },
-  { id: 'insights', icon: CheckCircle2, label: 'Insights Section', desc: 'How-it-works cards + copy' },
-  { id: 'dashboard', icon: BarChart2, label: 'Dashboard Section', desc: 'KPI cards, alerts & map' },
-  { id: 'validation', icon: FileText, label: 'Validation Section', desc: 'Certificates + testimonials' },
-  { id: 'contact', icon: Settings, label: 'Contact Section', desc: 'Pilot CTA + form copy' },
-  { id: 'deployments-page', icon: MapPin, label: 'Deployments Page', desc: 'Manage all entries & home preview' },
-  { id: 'partners', icon: Users, label: 'Partners Page', desc: 'Krushi Vikas video & photo gallery' },
-  { id: 'devices', icon: Signal, label: 'Live Devices', desc: 'Pump vs non-pump per live device' },
-  { id: 'master-tables', icon: FileText, label: 'Master & Telemetry', desc: 'Live Edge calculations & Supabase tables' },
-  { id: 'media', icon: Upload, label: 'Media Upload', desc: 'Upload images, videos & PDFs' },
-];
+    { id: 'visibility', icon: Eye, label: 'Visibility & Pages', desc: 'Toggle sections & enable routes' },
+    { id: 'hero', icon: Home, label: 'Hero Section', desc: 'Headline, tagline & media' },
+    { id: 'insights', icon: CheckCircle2, label: 'Insights Section', desc: 'How-it-works cards + copy' },
+    { id: 'dashboard', icon: BarChart2, label: 'Dashboard Section', desc: 'KPI cards, alerts & map' },
+    { id: 'validation', icon: FileText, label: 'Validation Section', desc: 'Certificates + testimonials' },
+    { id: 'contact', icon: Settings, label: 'Contact Section', desc: 'Pilot CTA + form copy' },
+    { id: 'deployments-page', icon: MapPin, label: 'Deployments Page', desc: 'Manage all entries & home preview' },
+    { id: 'partners', icon: Users, label: 'Partners Page', desc: 'Krushi Vikas video & photo gallery' },
+    { id: 'devices', icon: Signal, label: 'Live Devices', desc: 'Pump vs non-pump per live device' },
+    { id: 'master-tables', icon: FileText, label: 'Master & Telemetry', desc: 'Live Edge calculations & Supabase tables' },
+    { id: 'media', icon: Upload, label: 'Media Upload', desc: 'Upload images, videos & PDFs' },
+  ];
 
 const FLAG_DEFS: Array<{ key: SiteFlagKey; label: string; description: string }> = [
   { key: 'show_deployments', label: 'Deployments section', description: 'Show/hide deployment cards section on Home.' },
@@ -98,14 +98,14 @@ const FLAG_DEFS: Array<{ key: SiteFlagKey; label: string; description: string }>
 
 // ─── Video Thumbnail Picker ──────────────────────────────────────────────────
 
-function VideoThumbnailPicker({ 
-  videoUrl, 
-  onCapture, 
+function VideoThumbnailPicker({
+  videoUrl,
+  onCapture,
   disabled,
   bucket = 'site-media'
-}: { 
-  videoUrl: string; 
-  onCapture: (url: string) => void; 
+}: {
+  videoUrl: string;
+  onCapture: (url: string) => void;
   disabled?: boolean;
   bucket?: StorageBucketName;
 }) {
@@ -126,7 +126,7 @@ function VideoThumbnailPicker({
       if (!ctx) return;
 
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
+
       canvas.toBlob(async (blob) => {
         if (!blob) return;
         const file = new File([blob], `thumbnail-${Date.now()}.jpg`, { type: 'image/jpeg' });
@@ -148,10 +148,10 @@ function VideoThumbnailPicker({
     <div className="space-y-3 rounded-xl border border-teal-100 bg-teal-50/20 p-4">
       <div className="flex items-center justify-between">
         <p className="text-xs font-bold uppercase tracking-wider text-teal-700">Set Video Thumbnail</p>
-        <Button 
-          type="button" 
-          size="sm" 
-          onClick={captureFrame} 
+        <Button
+          type="button"
+          size="sm"
+          onClick={captureFrame}
           disabled={disabled || capturing || isDrive}
           className="bg-teal-600 hover:bg-teal-700 text-white h-7 text-[10px]"
         >
@@ -167,10 +167,10 @@ function VideoThumbnailPicker({
           </div>
         ) : (
           <>
-            <video 
-              ref={videoRef} 
-              src={displayUrl} 
-              controls 
+            <video
+              ref={videoRef}
+              src={displayUrl}
+              controls
               className="h-full w-full object-contain"
               crossOrigin="anonymous"
             />
@@ -256,15 +256,15 @@ function MediaUploadField({
   const trimmed = value.trim();
   const driveId = extractDriveFileId(trimmed);
   const drivePreview = toDrivePreviewUrl(trimmed);
-  
+
   // Improved detection for Google Drive links which don't have file extensions
-  const isImage = mediaType === 'image' || 
-                  /\.(jpg|jpeg|png|gif|webp|svg|avif)(\?|$)/i.test(trimmed) ||
-                  (driveId && mediaType === 'image');
-                  
-  const isVideo = mediaType === 'video' || 
-                  /\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(trimmed) ||
-                  (driveId && mediaType === 'video');
+  const isImage = mediaType === 'image' ||
+    /\.(jpg|jpeg|png|gif|webp|svg|avif)(\?|$)/i.test(trimmed) ||
+    (driveId && mediaType === 'image');
+
+  const isVideo = mediaType === 'video' ||
+    /\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(trimmed) ||
+    (driveId && mediaType === 'video');
 
   const isAnyFile = !isImage && !isVideo && trimmed.length > 0;
 
@@ -329,15 +329,15 @@ function MediaUploadField({
       )}
 
       {isVideo && trimmed && (
-        <VideoThumbnailPicker 
-          videoUrl={trimmed} 
+        <VideoThumbnailPicker
+          videoUrl={trimmed}
           onCapture={(url) => {
-             if (onThumbnail) {
-               onThumbnail(url);
-             } else {
-               toast({ title: 'Thumbnail URL copied!', description: url });
-               navigator.clipboard.writeText(url);
-             }
+            if (onThumbnail) {
+              onThumbnail(url);
+            } else {
+              toast({ title: 'Thumbnail URL copied!', description: url });
+              navigator.clipboard.writeText(url);
+            }
           }}
           disabled={disabled}
           bucket={bucket}
@@ -350,8 +350,8 @@ function MediaUploadField({
         className={cn(
           'cursor-pointer rounded-xl border-2 border-dashed p-5 text-center transition-colors',
           isDragReject ? 'border-red-400 bg-red-50/30' :
-          isDragActive ? 'border-teal-500 bg-teal-50/20' :
-          'border-border hover:border-teal-400 hover:bg-teal-50/10',
+            isDragActive ? 'border-teal-500 bg-teal-50/20' :
+              'border-border hover:border-teal-400 hover:bg-teal-50/10',
           (disabled || uploading) && 'pointer-events-none opacity-50',
         )}
       >
@@ -634,11 +634,11 @@ type DeploymentData = {
 function parseDeploymentData(raw: Record<string, unknown>): DeploymentData {
   const installations: Installation[] = Array.isArray(raw.installations)
     ? (raw.installations as Installation[]).map((x) => ({
-        title: String(x?.title ?? ''),
-        videoUrl: String(x?.videoUrl ?? ''),
-        notes: String(x?.notes ?? ''),
-        mediaCsv: String(x?.mediaCsv ?? ''),
-      }))
+      title: String(x?.title ?? ''),
+      videoUrl: String(x?.videoUrl ?? ''),
+      notes: String(x?.notes ?? ''),
+      mediaCsv: String(x?.mediaCsv ?? ''),
+    }))
     : [];
   const gallery: string[] = Array.isArray(raw.gallery)
     ? (raw.gallery as string[]).filter((x) => typeof x === 'string')
@@ -788,7 +788,7 @@ function DeploymentEditor({
                 <FieldLabel label="Deployment summary" hint="Full narrative about the site" />
                 <Textarea value={data.summary} onChange={(e) => setData({ ...data, summary: e.target.value })} disabled={busy} placeholder="Describe the deployment in detail…" className="min-h-[140px]" />
               </div>
-              
+
               <div>
                 <div className="mb-2 flex items-center justify-between">
                   <FieldLabel label="Summary Media" hint="Images or videos below the summary text" />
@@ -1509,7 +1509,7 @@ export default function AdminPage() {
                         {(() => {
                           const csv = String(heroField('carouselMediaCsv') ?? '');
                           const urls = csv === '' ? [] : csv.split(',').map(u => u.trim());
-                          
+
                           return (
                             <div className="grid gap-4 md:grid-cols-2">
                               {urls.map((url, idx) => (
@@ -1530,29 +1530,29 @@ export default function AdminPage() {
                                       <Trash2 className="h-4 w-4" />
                                     </Button>
                                   </div>
-                                  
+
                                   <MediaUploadField
-                                      label=""
-                                      value={url.split('|')[0]}
-                                      onChange={(u) => {
-                                        const parts = url.split('|');
-                                        const thumb = parts[1] ? `|${parts[1]}` : '';
-                                        const next = urls.map((x, i) => i === idx ? `${u}${thumb}` : x);
-                                        setHeroField('carouselMediaCsv', next.join(', '));
-                                      }}
-                                      onThumbnail={(thumbUrl) => {
-                                        const videoUrl = url.split('|')[0];
-                                        const next = urls.map((x, i) => i === idx ? `${videoUrl}|${thumbUrl}` : x);
-                                        setHeroField('carouselMediaCsv', next.join(', '));
-                                      }}
-                                      bucket="site-media"
-                                      folder="hero"
-                                      mediaType="video"
-                                      disabled={isBusy}
-                                    />
+                                    label=""
+                                    value={url.split('|')[0]}
+                                    onChange={(u) => {
+                                      const parts = url.split('|');
+                                      const thumb = parts[1] ? `|${parts[1]}` : '';
+                                      const next = urls.map((x, i) => i === idx ? `${u}${thumb}` : x);
+                                      setHeroField('carouselMediaCsv', next.join(', '));
+                                    }}
+                                    onThumbnail={(thumbUrl) => {
+                                      const videoUrl = url.split('|')[0];
+                                      const next = urls.map((x, i) => i === idx ? `${videoUrl}|${thumbUrl}` : x);
+                                      setHeroField('carouselMediaCsv', next.join(', '));
+                                    }}
+                                    bucket="site-media"
+                                    folder="hero"
+                                    mediaType="video"
+                                    disabled={isBusy}
+                                  />
                                 </div>
                               ))}
-                              
+
                               <button
                                 type="button"
                                 onClick={() => {
@@ -2548,89 +2548,89 @@ export default function AdminPage() {
                           />
                         </div>
                       </div>
-                      
+
                       <div className="pt-2 border-t border-teal-100/50">
-                         <div className="flex items-center justify-between mb-3">
-                            <div>
-                              <p className="text-sm font-semibold text-teal-900">Fallback Preview Media</p>
-                              <p className="text-xs text-muted-foreground">Used if no individual deployment has "Home page preview" media set.</p>
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <p className="text-sm font-semibold text-teal-900">Fallback Preview Media</p>
+                            <p className="text-xs text-muted-foreground">Used if no individual deployment has "Home page preview" media set.</p>
+                          </div>
+                          <SaveBar
+                            onSave={() => saveHomeContent.mutate(homeContent as unknown as Record<string, unknown>)}
+                            onReset={() => setHomeDraft(null)}
+                            saving={saveHomeContent.isPending}
+                            dirty={homeDirty}
+                            className="static p-0 bg-transparent border-none shadow-none"
+                          />
+                        </div>
+                        <div className="space-y-4">
+                          <MediaUploadField
+                            label="Fallback video"
+                            value={String((homeContent.deployments as Record<string, unknown>)?.previewVideoUrl ?? '')}
+                            onChange={(url) => setHomeDraft({ ...homeContent, deployments: { ...(homeContent.deployments as Record<string, unknown>), previewVideoUrl: url } })}
+                            bucket="deployments-media"
+                            folder="preview"
+                            mediaType="video"
+                            disabled={isBusy}
+                          />
+                          <div>
+                            <div className="mb-2 flex items-center justify-between">
+                              <FieldLabel label="Fallback photos" />
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  const imgs = Array.isArray((homeContent.deployments as Record<string, unknown>)?.previewImages)
+                                    ? ((homeContent.deployments as Record<string, unknown>).previewImages as string[])
+                                    : [];
+                                  if (imgs.length < 4) {
+                                    setHomeDraft({ ...homeContent, deployments: { ...(homeContent.deployments as Record<string, unknown>), previewImages: [...imgs, ''] } });
+                                  }
+                                }}
+                                disabled={isBusy}
+                                className="text-teal-700 border-teal-300"
+                              >
+                                <Plus className="mr-1 h-3 w-3" /> Add photo
+                              </Button>
                             </div>
-                            <SaveBar
-                              onSave={() => saveHomeContent.mutate(homeContent as unknown as Record<string, unknown>)}
-                              onReset={() => setHomeDraft(null)}
-                              saving={saveHomeContent.isPending}
-                              dirty={homeDirty}
-                              className="static p-0 bg-transparent border-none shadow-none"
-                            />
-                         </div>
-                         <div className="space-y-4">
-                            <MediaUploadField
-                              label="Fallback video"
-                              value={String((homeContent.deployments as Record<string, unknown>)?.previewVideoUrl ?? '')}
-                              onChange={(url) => setHomeDraft({ ...homeContent, deployments: { ...(homeContent.deployments as Record<string, unknown>), previewVideoUrl: url } })}
-                              bucket="deployments-media"
-                              folder="preview"
-                              mediaType="video"
-                              disabled={isBusy}
-                            />
-                            <div>
-                               <div className="mb-2 flex items-center justify-between">
-                                  <FieldLabel label="Fallback photos" />
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      const imgs = Array.isArray((homeContent.deployments as Record<string, unknown>)?.previewImages)
-                                        ? ((homeContent.deployments as Record<string, unknown>).previewImages as string[])
-                                        : [];
-                                      if (imgs.length < 4) {
-                                        setHomeDraft({ ...homeContent, deployments: { ...(homeContent.deployments as Record<string, unknown>), previewImages: [...imgs, ''] } });
-                                      }
-                                    }}
-                                    disabled={isBusy}
-                                    className="text-teal-700 border-teal-300"
-                                  >
-                                    <Plus className="mr-1 h-3 w-3" /> Add photo
-                                  </Button>
-                               </div>
-                               <div className="grid gap-3 md:grid-cols-2">
-                                  {(() => {
-                                    const imgs = Array.isArray((homeContent.deployments as Record<string, unknown>)?.previewImages)
-                                      ? ((homeContent.deployments as Record<string, unknown>).previewImages as string[])
-                                      : [];
-                                    return imgs.map((url, idx) => (
-                                      <div key={idx} className="space-y-1">
-                                        <MediaUploadField
-                                          label=""
-                                          value={url}
-                                          onChange={(u) => {
-                                            const next = imgs.map((x, i) => i === idx ? u : x);
-                                            setHomeDraft({ ...homeContent, deployments: { ...(homeContent.deployments as Record<string, unknown>), previewImages: next } });
-                                          }}
-                                          bucket="deployments-media"
-                                          folder="preview"
-                                          mediaType="image"
-                                          disabled={isBusy}
-                                        />
-                                        <div className="flex justify-end">
-                                          <Button
-                                            type="button"
-                                            size="sm"
-                                            variant="ghost"
-                                            className="text-red-500 h-6 px-2 text-[10px]"
-                                            onClick={() => setHomeDraft({ ...homeContent, deployments: { ...(homeContent.deployments as Record<string, unknown>), previewImages: imgs.filter((_, i) => i !== idx) } })}
-                                            disabled={isBusy}
-                                          >
-                                            Remove
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    ));
-                                  })()}
-                               </div>
+                            <div className="grid gap-3 md:grid-cols-2">
+                              {(() => {
+                                const imgs = Array.isArray((homeContent.deployments as Record<string, unknown>)?.previewImages)
+                                  ? ((homeContent.deployments as Record<string, unknown>).previewImages as string[])
+                                  : [];
+                                return imgs.map((url, idx) => (
+                                  <div key={idx} className="space-y-1">
+                                    <MediaUploadField
+                                      label=""
+                                      value={url}
+                                      onChange={(u) => {
+                                        const next = imgs.map((x, i) => i === idx ? u : x);
+                                        setHomeDraft({ ...homeContent, deployments: { ...(homeContent.deployments as Record<string, unknown>), previewImages: next } });
+                                      }}
+                                      bucket="deployments-media"
+                                      folder="preview"
+                                      mediaType="image"
+                                      disabled={isBusy}
+                                    />
+                                    <div className="flex justify-end">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        className="text-red-500 h-6 px-2 text-[10px]"
+                                        onClick={() => setHomeDraft({ ...homeContent, deployments: { ...(homeContent.deployments as Record<string, unknown>), previewImages: imgs.filter((_, i) => i !== idx) } })}
+                                        disabled={isBusy}
+                                      >
+                                        Remove
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ));
+                              })()}
                             </div>
-                         </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </Card>
@@ -3009,8 +3009,8 @@ function MediaLibrarySection() {
           className={cn(
             'cursor-pointer rounded-2xl border-2 border-dashed p-10 text-center transition-colors',
             isDragReject ? 'border-red-400 bg-red-50/30' :
-            isDragActive ? 'border-teal-500 bg-teal-50/20' :
-            'border-border hover:border-teal-400 hover:bg-teal-50/10',
+              isDragActive ? 'border-teal-500 bg-teal-50/20' :
+                'border-border hover:border-teal-400 hover:bg-teal-50/10',
             uploading && 'pointer-events-none opacity-50',
           )}
         >
@@ -3403,7 +3403,7 @@ function MasterTablesSection() {
             setLoading(true);
             try {
               toast({ title: 'Syncing Firebase Data', description: `Fetching last ${timeRangeDays} days RTDB telemetry & computing metrics…` });
-              
+
               const rtdbUrl = import.meta.env.VITE_FIREBASE_DATABASE_URL || 'https://water-sensor-a14d5-default-rtdb.asia-southeast1.firebasedatabase.app';
               const apiKey = import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyBefKppOOhTLAwIfzbxXOAQ4iOgJLL_EGA';
 
@@ -3442,13 +3442,19 @@ function MasterTablesSection() {
               const wellDepthMap = new Map<string, number>();
               const wellDiameterMap = new Map<string, number>();
 
+
+              // Preserve correct existing well_master values — don't let missing Firebase metadata overwrite them
+              const { data: existingWells } = await supabase.from('well_master').select('well_id, well_depth_meters, well_diameter_meters');
+              const existingWellDepthMap = new Map<string, number>((existingWells || []).map((w: any) => [w.well_id, w.well_depth_meters]));
+              const existingWellDiameterMap = new Map<string, number>((existingWells || []).map((w: any) => [w.well_id, w.well_diameter_meters]));
+
               if (devices && typeof devices === 'object') {
                 for (const [dKey, dNode] of Object.entries(devices)) {
                   const meta = (dNode as any)?.meta || {};
                   const deviceId = String(meta.deviceId || dKey).trim();
                   const lat = Number(meta.lat || 18.65);
                   const long = Number(meta.long || meta.lng || 72.88);
-                  
+
                   let district = 'Raigad';
                   if (lat >= 19.8 && lat <= 20.8 && long >= 77.0 && long <= 78.5) district = 'Washim';
                   else if (lat >= 20.2 && lat <= 21.3 && long >= 76.8 && long <= 78.2) district = 'Akola';
@@ -3457,8 +3463,8 @@ function MasterTablesSection() {
                   const locationId = `LOC-${district.toUpperCase()}`;
                   const wellId = `WEL-${deviceId}`;
 
-                  const wellDepth = Number(meta.wellDepth || meta.wellDepthMeters || meta.depth || 20.0);
-                  const wellDiameter = Number(meta.wellDiameter || meta.wellDiameterMeters || meta.diameter || 1.5);
+                  const wellDepth = Number(meta.wellDepth || meta.wellDepthMeters || meta.depth || existingWellDepthMap.get(wellId) || 20.0);
+                  const wellDiameter = Number(meta.wellDiameter || meta.wellDiameterMeters || meta.diameter || existingWellDiameterMap.get(wellId) || 1.5);
                   const pumpIntake = Number(meta.pumpIntakeLevelMeters || meta.pumpIntake || 2.0);
                   const pumpAttached = meta.pumpAttached !== undefined ? Boolean(meta.pumpAttached) : true;
                   const pumpType = meta.pumpType || 'Submersible';
@@ -3487,7 +3493,7 @@ function MasterTablesSection() {
                     pump_type: pumpType,
                     pump_intake_level_meters: pumpIntake,
                     status: 'Active',
-                  }, { onConflict: 'well_id' , ignoreDuplicates: true});
+                  }, { onConflict: 'well_id', ignoreDuplicates: true });
 
                   await supabase.from('device_master').upsert({
                     device_id: deviceId,
@@ -3495,7 +3501,7 @@ function MasterTablesSection() {
                     device_serial_number: deviceId,
                     status: 'Active',
                     start_stop_method: 'automatic',
-                  }, { onConflict: 'device_id' , ignoreDuplicates: true });
+                  }, { onConflict: 'device_id', ignoreDuplicates: true });
 
                   devCount++;
                 }
@@ -3551,7 +3557,7 @@ function MasterTablesSection() {
                     if (!wellReadingsByDate.has(wellId)) wellReadingsByDate.set(wellId, new Map());
                     const dateMap = wellReadingsByDate.get(wellId)!;
                     if (!dateMap.has(readingDate)) dateMap.set(readingDate, []);
-                    dateMap.get(readingDate)!.push({depth, timestampMs: readingTimeMs });
+                    dateMap.get(readingDate)!.push({ depth, timestampMs: readingTimeMs });
                   }
                 }
 
@@ -3578,13 +3584,26 @@ function MasterTablesSection() {
                   }
                 }
 
+                // Pull real pump run data — this is the single source of truth for run counts/runtime/extraction
+                const { data: pumpRunRows } = await supabase.from('pump_run_summary').select('well_id, run_date, pump_runtime_minutes, pump_extraction_per_run_liters, water_level_drop_during_run_meters');
+                const pumpRunsByWellDate = new Map<string, { count: number; runtime: number; extraction: number; drop: number }>();
+                for (const row of pumpRunRows || []) {
+                  const key = `${row.well_id}_${row.run_date}`;
+                  const agg = pumpRunsByWellDate.get(key) || { count: 0, runtime: 0, extraction: 0, drop: 0 };
+                  agg.count += 1;
+                  agg.runtime += Number(row.pump_runtime_minutes) || 0;
+                  agg.extraction += Number(row.pump_extraction_per_run_liters) || 0;
+                  agg.drop += Number(row.water_level_drop_during_run_meters) || 0;
+                  pumpRunsByWellDate.set(key, agg);
+                }
+
                 // 3. Compute Derived Per-Well Summaries (D, E, F, J)
                 for (const [wellId, dateMap] of wellReadingsByDate.entries()) {
                   const sortedDates = Array.from(dateMap.keys()).sort();
                   const wellDepth = wellDepthMap.get(wellId) || 20.0;
                   const wellDiameter = wellDiameterMap.get(wellId) || 1.5;
                   const wellArea = 3.14159265 * Math.pow(wellDiameter / 2, 2);
-                  
+
                   const dailyExtractionHistory: number[] = [];
                   for (let i = 0; i < sortedDates.length; i++) {
                     const dateStr = sortedDates[i];
@@ -3599,40 +3618,46 @@ function MasterTablesSection() {
                     const safePumpOp = safetyBuffer > 2.0;
 
                     // Calculate Pump Runs & Water Extraction for the day from raw depth readings
-                    const rawReadingsList = dateMap.get(dateStr)!;
-                    let dailyPumpRunCount = 0;
-                    let dailyPumpRuntimeMinutes = 0;
-                    let dailyWaterExtractionLiters = 0;
-                    let totalDropMeters = 0;
+                    // const rawReadingsList = dateMap.get(dateStr)!;
+                    // let dailyPumpRunCount = 0;
+                    // let dailyPumpRuntimeMinutes = 0;
+                    // let dailyWaterExtractionLiters = 0;
+                    // let totalDropMeters = 0;
 
-                    let inPumpRun = false;
-                    for (let rIdx = 1; rIdx < rawReadingsList.length; rIdx++) {
-                      const prev = rawReadingsList[rIdx - 1];
-                      const curr = rawReadingsList[rIdx];
-                      const diff = curr.depth - prev.depth;
-                    
-                      if (diff >= 0.02) {
-                        if (!inPumpRun) {
-                          dailyPumpRunCount++;
-                          inPumpRun = true;
-                        }
-                        const elapsedMinutes = (curr.timestampMs - prev.timestampMs) / 60000;
-                        dailyPumpRuntimeMinutes += Math.max(0, elapsedMinutes); // real elapsed time, not a flat guess
-                        totalDropMeters += diff;
-                      } else if (diff < -0.02) {
-                        inPumpRun = false;
-                      }
-                    }
+                    // let inPumpRun = false;
+                    // for (let rIdx = 1; rIdx < rawReadingsList.length; rIdx++) {
+                    //   const prev = rawReadingsList[rIdx - 1];
+                    //   const curr = rawReadingsList[rIdx];
+                    //   const diff = curr.depth - prev.depth;
+
+                    //   if (diff >= 0.02) {
+                    //     if (!inPumpRun) {
+                    //       dailyPumpRunCount++;
+                    //       inPumpRun = true;
+                    //     }
+                    //     const elapsedMinutes = (curr.timestampMs - prev.timestampMs) / 60000;
+                    //     dailyPumpRuntimeMinutes += Math.max(0, elapsedMinutes); // real elapsed time, not a flat guess
+                    //     totalDropMeters += diff;
+                    //   } else if (diff < -0.02) {
+                    //     inPumpRun = false;
+                    //   }
+                    // }
 
                     // Fallback estimate for active telemetry days when threshold noise is high
-                    if (dailyPumpRunCount === 0 && rawReadingsList.length > 3) {
-                      dailyPumpRunCount = Math.min(3, Math.ceil(rawReadingsList.length / 10));
-                      dailyPumpRuntimeMinutes = Math.min(240, rawReadingsList.length * 15);
-                      const depthValues = rawReadingsList.map(r => r.depth);
-                      totalDropMeters = Math.max(0.1, (Math.max(...depthValues) - Math.min(...depthValues)));
-                    }
+                    // if (dailyPumpRunCount === 0 && rawReadingsList.length > 3) {
+                    //   dailyPumpRunCount = Math.min(3, Math.ceil(rawReadingsList.length / 10));
+                    //   dailyPumpRuntimeMinutes = Math.min(240, rawReadingsList.length * 15);
+                    //   const depthValues = rawReadingsList.map(r => r.depth);
+                    //   totalDropMeters = Math.max(0.1, (Math.max(...depthValues) - Math.min(...depthValues)));
+                    // }
 
-                    dailyWaterExtractionLiters = wellArea * totalDropMeters * 1000.0;
+                    // dailyWaterExtractionLiters = wellArea * totalDropMeters * 1000.0;
+                    // Use actual pump run data — no re-derivation, no fabrication
+                    const runAgg = pumpRunsByWellDate.get(`${wellId}_${dateStr}`) || { count: 0, runtime: 0, extraction: 0, drop: 0 };
+                    const dailyPumpRunCount = runAgg.count;
+                    const dailyPumpRuntimeMinutes = runAgg.runtime;
+                    const dailyWaterExtractionLiters = runAgg.extraction;
+                    const totalDropMeters = runAgg.drop;
                     dailyExtractionHistory.push(dailyWaterExtractionLiters);
                     const last7 = dailyExtractionHistory.slice(-7);
                     const avgSevenDayExtractionLiters = last7.reduce((a, b) => a + b, 0) / last7.length;
