@@ -301,6 +301,20 @@ export type FirebaseDeviceRegistryMeta = {
   long?: number;
   lng?: number;
   siteName?: string;
+  district?: string;
+  districtName?: string;
+  taluka?: string;
+  state?: string;
+  wellDepth?: number;
+  wellDepthMeters?: number;
+  wellDiameter?: number;
+  wellDiameterMeters?: number;
+  diameter?: number;
+  pumpIntakeLevelMeters?: number;
+  pumpIntake?: number;
+  pumpAttached?: boolean;
+  pumpType?: string;
+  startStopMethod?: string;
   configuredAt?: string;
   deviceOnlineSince?: string;
   installerCompany?: string;
@@ -542,7 +556,7 @@ function getSensorStatusFromTimestamp(timestamp: number): 'active' | 'offline' {
   return Date.now() - timestamp < STATUS_FRESH_THRESHOLD_MS ? 'active' : 'offline';
 }
 
-function matchDistrictName(lat?: number, long?: number): string {
+export function matchDistrictName(lat?: number, long?: number): string {
 
   if (lat == null || long == null) return 'Unknown';
 

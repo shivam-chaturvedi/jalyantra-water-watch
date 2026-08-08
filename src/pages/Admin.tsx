@@ -50,6 +50,7 @@ import {
   toDriveStreamUrl
 } from '@/lib/driveLinks';
 import { useLiveDevices } from '@/hooks/useLiveDevices';
+import { matchDistrictName } from '@/lib/data';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -3119,35 +3120,35 @@ function MasterTablesSection() {
   }> = {
     location_master: {
       title: 'A. Location Master Table',
-      source: 'Firebase RTDB Node: /devices/{deviceId}/meta (lat, long, siteName)',
-      calculation: 'Mapped dynamically from device GPS coordinates (Washim if 19.8–20.8°N / 77–78.5°E, Akola, Ahilyanagar, or Raigad).',
+      source: 'Firebase RTDB Node: /devices/{deviceId}/meta (lat, long, siteName, district, state)',
+      calculation: 'Firebase-only. District from meta.district when present, otherwise nearest district to Firebase lat/long. No coordinate fallbacks.',
       destination: 'Saved in Supabase Table: location_master',
       columns: [
-        { name: 'location_id', formula: 'Generated ID (e.g., LOC-RAIGAD)' },
-        { name: 'village_city', formula: 'meta.siteName || district' },
-        { name: 'taluka', formula: 'District name' },
-        { name: 'district', formula: 'Geo-fenced district from lat/long' },
-        { name: 'state', formula: 'Default: Maharashtra' },
-        { name: 'latitude', formula: 'meta.lat || 18.65' },
-        { name: 'longitude', formula: 'meta.long || 72.88' },
+        { name: 'location_id', formula: 'LOC-{district}' },
+        { name: 'village_city', formula: 'meta.siteName (required from Firebase)' },
+        { name: 'taluka', formula: 'meta.taluka || district' },
+        { name: 'district', formula: 'meta.district || nearest district from lat/long' },
+        { name: 'state', formula: 'meta.state (omitted if missing)' },
+        { name: 'latitude', formula: 'meta.lat (required)' },
+        { name: 'longitude', formula: 'meta.long / meta.lng (required)' },
         { name: 'status', formula: 'Active' },
       ],
     },
     well_master: {
       title: 'A. Well Master Table',
-      source: 'Firebase RTDB Node: /devices/{deviceId}/meta (wellDepth, wellDiameter, pumpIntakeLevelMeters)',
-      calculation: 'Well Area = π × (diameter / 2)^2. Depth & diameter are dynamically extracted or set to 20m / 1.5m defaults.',
+      source: 'Firebase RTDB Node: /devices/{deviceId}/meta (siteName, wellDepth, wellDiameter, pumpIntakeLevelMeters)',
+      calculation: 'Firebase-only. Physical dimensions written only when present in meta — never hardcoded. New wells require meta.wellDepth + meta.wellDiameter.',
       destination: 'Saved in Supabase Table: well_master',
       columns: [
         { name: 'well_id', formula: 'WEL-{deviceId}' },
         { name: 'location_id', formula: 'FK to location_master' },
         { name: 'well_name', formula: 'meta.siteName || Well {deviceId}' },
-        { name: 'well_depth_meters', formula: 'meta.wellDepth || 20.0m' },
-        { name: 'well_diameter_meters', formula: 'meta.wellDiameter || 1.5m' },
-        { name: 'well_area_square_meters', formula: 'π × (diameter / 2)^2 = 1.7671 m²' },
-        { name: 'pump_attached', formula: 'meta.pumpAttached || true' },
-        { name: 'pump_type', formula: 'meta.pumpType || Submersible' },
-        { name: 'pump_intake_level_meters', formula: 'meta.pumpIntakeLevelMeters || 2.0m' },
+        { name: 'well_depth_meters', formula: 'meta.wellDepth / meta.wellDepthMeters only (never meta.depth, never default)' },
+        { name: 'well_diameter_meters', formula: 'meta.wellDiameter / meta.wellDiameterMeters / meta.diameter only' },
+        { name: 'well_area_square_meters', formula: 'π × (diameter / 2)^2 from Firebase diameter' },
+        { name: 'pump_attached', formula: 'meta.pumpAttached (omitted if missing)' },
+        { name: 'pump_type', formula: 'meta.pumpType (omitted if missing)' },
+        { name: 'pump_intake_level_meters', formula: 'meta.pumpIntakeLevelMeters / meta.pumpIntake only' },
       ],
     },
     partner_master: {
@@ -3438,70 +3439,141 @@ function MasterTablesSection() {
                 { alert_code: 'POOR_RECOVERY', alert_name: 'Poor Groundwater Recovery', alert_level: 'well', alert_type: 'warning', trigger_field: 'recoveryAmountMeters', trigger_logic: 'recoveryAmountMeters < 0.1 AND hoursGap >= 24', expiry_logic: 'recoveryAmountMeters >= 0.2', calculation_frequency: 'End of Day', default_message: 'Well exhibits minimal groundwater recovery (<0.1m).' },
               ], { onConflict: 'alert_code' });
 
-              // 1. Process Master Tables (A)
+              // 1. Process Master Tables (A) — Firebase-only values, no hardcoded fallbacks
               const wellDepthMap = new Map<string, number>();
               const wellDiameterMap = new Map<string, number>();
+              const wellPumpIntakeMap = new Map<string, number>();
+              const wellDistrictMap = new Map<string, string>();
+              const wellStateMap = new Map<string, string>();
 
+              const optionalPositive = (value: unknown): number | undefined => {
+                if (value === null || value === undefined || value === '') return undefined;
+                const n = Number(value);
+                return Number.isFinite(n) && n > 0 ? n : undefined;
+              };
+              const optionalNumber = (value: unknown): number | undefined => {
+                if (value === null || value === undefined || value === '') return undefined;
+                const n = Number(value);
+                return Number.isFinite(n) ? n : undefined;
+              };
 
-              // Preserve correct existing well_master values — don't let missing Firebase metadata overwrite them
-              const { data: existingWells } = await supabase.from('well_master').select('well_id, well_depth_meters, well_diameter_meters');
-              const existingWellDepthMap = new Map<string, number>((existingWells || []).map((w: any) => [w.well_id, w.well_depth_meters]));
-              const existingWellDiameterMap = new Map<string, number>((existingWells || []).map((w: any) => [w.well_id, w.well_diameter_meters]));
+              // Seed calculation maps from existing curated rows (read-only). Sync never invents dimensions.
+              const { data: existingWells } = await supabase
+                .from('well_master')
+                .select('well_id, well_depth_meters, well_diameter_meters, pump_intake_level_meters, location_id');
+              const existingWellById = new Map<string, any>((existingWells || []).map((w: any) => [w.well_id, w]));
+              for (const w of existingWells || []) {
+                const depth = optionalPositive(w.well_depth_meters);
+                const diameter = optionalPositive(w.well_diameter_meters);
+                const intake = optionalPositive(w.pump_intake_level_meters);
+                if (depth != null) wellDepthMap.set(w.well_id, depth);
+                if (diameter != null) wellDiameterMap.set(w.well_id, diameter);
+                if (intake != null) wellPumpIntakeMap.set(w.well_id, intake);
+              }
+
+              const { data: existingLocations } = await supabase
+                .from('location_master')
+                .select('location_id, district, state');
+              const locationById = new Map<string, any>((existingLocations || []).map((l: any) => [l.location_id, l]));
+              for (const w of existingWells || []) {
+                const loc = locationById.get(w.location_id);
+                if (loc?.district) wellDistrictMap.set(w.well_id, loc.district);
+                if (loc?.state) wellStateMap.set(w.well_id, loc.state);
+              }
 
               if (devices && typeof devices === 'object') {
                 for (const [dKey, dNode] of Object.entries(devices)) {
                   const meta = (dNode as any)?.meta || {};
                   const deviceId = String(meta.deviceId || dKey).trim();
-                  const lat = Number(meta.lat || 18.65);
-                  const long = Number(meta.long || meta.lng || 72.88);
+                  if (!deviceId) continue;
 
-                  let district = 'Raigad';
-                  if (lat >= 19.8 && lat <= 20.8 && long >= 77.0 && long <= 78.5) district = 'Washim';
-                  else if (lat >= 20.2 && lat <= 21.3 && long >= 76.8 && long <= 78.2) district = 'Akola';
-                  else if (lat >= 19.5 && lat <= 20.5 && long >= 74.2 && long <= 75.5) district = 'Ahilyanagar';
+                  const lat = optionalNumber(meta.lat);
+                  const long = optionalNumber(meta.long ?? meta.lng);
+                  if (lat == null || long == null) {
+                    console.warn(`[Firebase Sync] Skipping device ${deviceId}: meta.lat/long missing`);
+                    continue;
+                  }
 
-                  const locationId = `LOC-${district.toUpperCase()}`;
+                  const district =
+                    String(meta.district || meta.districtName || '').trim() || matchDistrictName(lat, long);
+                  const state = String(meta.state || '').trim();
+                  const locationId = `LOC-${district.toUpperCase().replace(/\s+/g, '-')}`;
                   const wellId = `WEL-${deviceId}`;
 
-                  const wellDepth = Number(meta.wellDepth || meta.wellDepthMeters || meta.depth || existingWellDepthMap.get(wellId) || 20.0);
-                  const wellDiameter = Number(meta.wellDiameter || meta.wellDiameterMeters || meta.diameter || existingWellDiameterMap.get(wellId) || 1.5);
-                  const pumpIntake = Number(meta.pumpIntakeLevelMeters || meta.pumpIntake || 2.0);
-                  const pumpAttached = meta.pumpAttached !== undefined ? Boolean(meta.pumpAttached) : true;
-                  const pumpType = meta.pumpType || 'Submersible';
+                  // Physical dims ONLY from Firebase meta (never meta.depth water-level reading, never defaults)
+                  const firebaseWellDepth = optionalPositive(meta.wellDepth ?? meta.wellDepthMeters);
+                  const firebaseWellDiameter = optionalPositive(
+                    meta.wellDiameter ?? meta.wellDiameterMeters ?? meta.diameter,
+                  );
+                  const firebasePumpIntake = optionalPositive(meta.pumpIntakeLevelMeters ?? meta.pumpIntake);
 
-                  wellDepthMap.set(wellId, wellDepth);
-                  wellDiameterMap.set(wellId, wellDiameter);
+                  if (firebaseWellDepth != null) wellDepthMap.set(wellId, firebaseWellDepth);
+                  if (firebaseWellDiameter != null) wellDiameterMap.set(wellId, firebaseWellDiameter);
+                  if (firebasePumpIntake != null) wellPumpIntakeMap.set(wellId, firebasePumpIntake);
+                  wellDistrictMap.set(wellId, district);
+                  if (state) wellStateMap.set(wellId, state);
 
-                  await supabase.from('location_master').upsert({
+                  const locationPayload: Record<string, unknown> = {
                     location_id: locationId,
-                    village_city: meta.siteName || district,
-                    taluka: district,
-                    district: district,
-                    state: 'Maharashtra',
+                    village_city: String(meta.siteName || '').trim() || district,
+                    taluka: String(meta.taluka || '').trim() || district,
+                    district,
                     latitude: lat,
                     longitude: long,
                     status: 'Active',
-                  }, { onConflict: 'location_id', ignoreDuplicates: true });
+                  };
+                  if (state) locationPayload.state = state;
 
-                  await supabase.from('well_master').upsert({
-                    well_id: wellId,
+                  await supabase.from('location_master').upsert(locationPayload, { onConflict: 'location_id' });
+
+                  const wellExists = existingWellById.has(wellId);
+                  const wellPatch: Record<string, unknown> = {
                     location_id: locationId,
-                    well_name: meta.siteName || `Well ${deviceId}`,
-                    well_depth_meters: wellDepth,
-                    well_diameter_meters: wellDiameter,
-                    pump_attached: pumpAttached,
-                    pump_type: pumpType,
-                    pump_intake_level_meters: pumpIntake,
+                    well_name: String(meta.siteName || '').trim() || `Well ${deviceId}`,
                     status: 'Active',
-                  }, { onConflict: 'well_id', ignoreDuplicates: true });
+                  };
+                  if (firebaseWellDepth != null) wellPatch.well_depth_meters = firebaseWellDepth;
+                  if (firebaseWellDiameter != null) wellPatch.well_diameter_meters = firebaseWellDiameter;
+                  if (firebasePumpIntake != null) wellPatch.pump_intake_level_meters = firebasePumpIntake;
+                  if (meta.pumpAttached !== undefined) wellPatch.pump_attached = Boolean(meta.pumpAttached);
+                  if (meta.pumpType) wellPatch.pump_type = String(meta.pumpType);
 
-                  await supabase.from('device_master').upsert({
-                    device_id: deviceId,
-                    well_id: wellId,
+                  let wellReady = wellExists;
+                  if (wellExists) {
+                    // Partial UPDATE — never rewrites omitted dimensions with hardcodes
+                    await supabase.from('well_master').update(wellPatch).eq('well_id', wellId);
+                  } else if (firebaseWellDepth != null && firebaseWellDiameter != null) {
+                    await supabase.from('well_master').insert({
+                      well_id: wellId,
+                      ...wellPatch,
+                      well_depth_meters: firebaseWellDepth,
+                      well_diameter_meters: firebaseWellDiameter,
+                    });
+                    existingWellById.set(wellId, { well_id: wellId, ...wellPatch });
+                    wellReady = true;
+                  } else {
+                    console.warn(
+                      `[Firebase Sync] Skipping new well_master for ${wellId}: Firebase meta missing wellDepth/wellDiameter`,
+                    );
+                  }
+
+                  const devicePayload: Record<string, unknown> = {
                     device_serial_number: deviceId,
                     status: 'Active',
-                    start_stop_method: 'automatic',
-                  }, { onConflict: 'device_id', ignoreDuplicates: true });
+                  };
+                  if (wellReady) devicePayload.well_id = wellId;
+                  if (meta.startStopMethod) devicePayload.start_stop_method = String(meta.startStopMethod);
+
+                  const { data: existingDevice } = await supabase
+                    .from('device_master')
+                    .select('device_id')
+                    .eq('device_id', deviceId)
+                    .maybeSingle();
+                  if (existingDevice) {
+                    await supabase.from('device_master').update(devicePayload).eq('device_id', deviceId);
+                  } else {
+                    await supabase.from('device_master').insert({ device_id: deviceId, ...devicePayload });
+                  }
 
                   devCount++;
                 }
@@ -3587,8 +3659,9 @@ function MasterTablesSection() {
                 // 2.5. Detect Pump Runs from Raw Depth Readings & Insert into pump_run_summary (C)
                 // NOTE: This ADDS new rows only. It does not touch or delete any existing pump_run_summary rows.
                 for (const [wellId, dateMap] of wellReadingsByDate.entries()) {
-                  const wellDiameterForRuns = wellDiameterMap.get(wellId) || 1.5;
-                  const wellAreaForRuns = 3.14159265 * Math.pow(wellDiameterForRuns / 2, 2);
+                  const wellDiameterForRuns = wellDiameterMap.get(wellId);
+                  const wellAreaForRuns =
+                    wellDiameterForRuns != null ? 3.14159265 * Math.pow(wellDiameterForRuns / 2, 2) : null;
 
                   for (const [dateStr, readings] of dateMap.entries()) {
                     const sorted = [...readings].sort((a, b) => a.timestampMs - b.timestampMs);
@@ -3618,7 +3691,7 @@ function MasterTablesSection() {
                       const endPoint = sorted[run.endIdx];
                       const drop = Math.max(0, endPoint.depth - startPoint.depth);
                       const runtimeMinutes = Math.max(0, (endPoint.timestampMs - startPoint.timestampMs) / 60000);
-                      const extractionLiters = wellAreaForRuns * drop * 1000.0;
+                      const extractionLiters = wellAreaForRuns != null ? wellAreaForRuns * drop * 1000.0 : 0;
                       return {
                         well_id: wellId,
                         run_date: dateStr,
@@ -3655,11 +3728,16 @@ function MasterTablesSection() {
                 }
 
                 // 3. Compute Derived Per-Well Summaries (D, E, F, J)
+                const districtDailyAgg = new Map<string, { wells: Set<string>; depthSum: number; depthCount: number; extraction: number; runtime: number }>();
+
                 for (const [wellId, dateMap] of wellReadingsByDate.entries()) {
                   const sortedDates = Array.from(dateMap.keys()).sort();
-                  const wellDepth = wellDepthMap.get(wellId) || 20.0;
-                  const wellDiameter = wellDiameterMap.get(wellId) || 1.5;
-                  const wellArea = 3.14159265 * Math.pow(wellDiameter / 2, 2);
+                  const wellDepth = wellDepthMap.get(wellId);
+                  const wellDiameter = wellDiameterMap.get(wellId);
+                  const pumpIntake = wellPumpIntakeMap.get(wellId);
+                  const wellArea = wellDiameter != null ? 3.14159265 * Math.pow(wellDiameter / 2, 2) : null;
+                  const district = wellDistrictMap.get(wellId);
+                  const state = wellStateMap.get(wellId);
 
                   const dailyExtractionHistory: number[] = [];
                   for (let i = 0; i < sortedDates.length; i++) {
@@ -3668,11 +3746,13 @@ function MasterTablesSection() {
                     const mid = Math.floor(depths.length / 2);
                     const medianDepth = depths.length % 2 !== 0 ? depths[mid] : (depths[mid - 1] + depths[mid]) / 2;
 
-                    const remainingDepth = wellDepth - medianDepth; // can be negative — signals well is deeper than recorded depth
-                    const remainingVolumeLiters = wellArea * remainingDepth * 1000.0;
-                    const safetyBuffer = remainingDepth - 2.0; // 2m intake level
-                    const dryRunRisk = safetyBuffer <= 1.0;
-                    const safePumpOp = safetyBuffer > 2.0;
+                    const remainingDepth = wellDepth != null ? wellDepth - medianDepth : null;
+                    const remainingVolumeLiters =
+                      remainingDepth != null && wellArea != null ? wellArea * remainingDepth * 1000.0 : null;
+                    const safetyBuffer =
+                      remainingDepth != null && pumpIntake != null ? remainingDepth - pumpIntake : null;
+                    const dryRunRisk = safetyBuffer != null ? safetyBuffer <= 1.0 : false;
+                    const safePumpOp = safetyBuffer != null ? safetyBuffer > pumpIntake! : true;
 
                     // Calculate Pump Runs & Water Extraction for the day from raw depth readings
                     // const rawReadingsList = dateMap.get(dateStr)!;
@@ -3729,14 +3809,17 @@ function MasterTablesSection() {
                       daily_water_level_drop_meters: totalDropMeters,
                       remaining_water_depth_meters: remainingDepth,
                       remaining_water_volume_liters: remainingVolumeLiters,
-                      estimated_days_remaining: avgSevenDayExtractionLiters > 0 ? remainingVolumeLiters / avgSevenDayExtractionLiters : null,
+                      estimated_days_remaining:
+                        remainingVolumeLiters != null && avgSevenDayExtractionLiters > 0
+                          ? remainingVolumeLiters / avgSevenDayExtractionLiters
+                          : null,
                       updated_at: new Date().toISOString(),
                     }, { onConflict: 'well_id, date' });
 
                     // Daily Well Health Summary (F)
-                    let healthStatus = "Green";
-                    if (dryRunRisk) healthStatus = "Red";
-                    else if (!safePumpOp) healthStatus = "Amber";
+                    let healthStatus = 'Green';
+                    if (dryRunRisk) healthStatus = 'Red';
+                    else if (!safePumpOp) healthStatus = 'Amber';
 
                     await supabase.from('daily_well_health_summary').upsert({
                       well_id: wellId,
@@ -3765,12 +3848,12 @@ function MasterTablesSection() {
                     }
 
                     // Alert Log Generation (J)
-                    if (dryRunRisk) {
+                    if (dryRunRisk && safetyBuffer != null) {
                       await supabase.from('alert_logs').insert({
                         alert_code: 'DRY_RUN_RISK',
                         well_id: wellId,
-                        district: 'Raigad',
-                        state: 'Maharashtra',
+                        district: district || null,
+                        state: state || null,
                         alert_type: 'warning',
                         trigger_field: 'safetyBufferMeters',
                         trigger_value: `${safetyBuffer.toFixed(2)}m`,
@@ -3778,26 +3861,40 @@ function MasterTablesSection() {
                         triggered_at: new Date().toISOString(),
                       });
                     }
+
+                    if (district) {
+                      const aggKey = `${district}__${dateStr}`;
+                      const agg = districtDailyAgg.get(aggKey) || {
+                        wells: new Set<string>(),
+                        depthSum: 0,
+                        depthCount: 0,
+                        extraction: 0,
+                        runtime: 0,
+                      };
+                      agg.wells.add(wellId);
+                      agg.depthSum += medianDepth;
+                      agg.depthCount += 1;
+                      agg.extraction += dailyWaterExtractionLiters;
+                      agg.runtime += dailyPumpRuntimeMinutes;
+                      districtDailyAgg.set(aggKey, agg);
+                    }
                   }
                 }
 
-                // 4. Compute Per-District Summaries (G, H)
-                const todayStr = new Date().toISOString().split('T')[0];
-                await supabase.from('district_daily_summary').upsert({
-                  district: 'Raigad',
-                  date: todayStr,
-                  total_active_wells_per_district: devCount || 1,
-                  avg_water_depth_per_district_meters: 5.5,
-                  updated_at: new Date().toISOString(),
-                }, { onConflict: 'district, date' });
-
-                await supabase.from('weekly_monthly_district_summary').upsert({
-                  district: 'Raigad',
-                  calculation_date: todayStr,
-                  avg_seven_day_depth_change_per_district_meters: 0.15,
-                  avg_thirty_day_depth_change_per_district_meters: 0.60,
-                  updated_at: new Date().toISOString(),
-                }, { onConflict: 'district, calculation_date' });
+                // 4. Compute Per-District Summaries (G, H) from real aggregated Firebase-derived data
+                for (const [aggKey, agg] of districtDailyAgg.entries()) {
+                  const [districtName, dateStr] = aggKey.split('__');
+                  await supabase.from('district_daily_summary').upsert({
+                    district: districtName,
+                    date: dateStr,
+                    total_active_wells_per_district: agg.wells.size,
+                    total_daily_water_extraction_per_district_liters: agg.extraction,
+                    total_daily_pump_runtime_per_district_minutes: agg.runtime,
+                    avg_water_depth_per_district_meters: agg.depthCount > 0 ? agg.depthSum / agg.depthCount : null,
+                    avg_daily_pump_runtime_per_district_minutes: agg.wells.size > 0 ? agg.runtime / agg.wells.size : null,
+                    updated_at: new Date().toISOString(),
+                  }, { onConflict: 'district, date' });
+                }
               }
 
               toast({
