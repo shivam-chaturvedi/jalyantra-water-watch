@@ -3636,7 +3636,7 @@ function MasterTablesSection() {
                     });
 
                     if (rowsForDate.length > 0) {
-                      await supabase.from('pump_run_summary').insert(rowsForDate);
+                      await supabase.from('pump_run_summary').upsert(rowsForDate, { onConflict: 'well_id,pump_start_time,pump_stop_time' });
                     }
                   }
                 }
