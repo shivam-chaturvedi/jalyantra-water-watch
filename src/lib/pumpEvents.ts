@@ -1,8 +1,5 @@
 import type { RtdbCsvRow, SensorHistoryPoint } from '@/lib/data';
 
-/** No reading for this long ⇒ pump powered off → start a new pumping event. */
-export const DEFAULT_PUMP_GAP_MS = 20 * 60 * 1000;
-
 /** Trailing moving-average window (3–5 samples) per pump run for chart noise reduction. */
 export const PUMP_CHART_MA_WINDOW = 5;
 
@@ -129,32 +126,100 @@ export function filterPointsSince(points: SensorHistoryPoint[], sinceMs: number)
     .sort((a, b) => a.timestamp - b.timestamp);
 }
 
-function samePumpRun(prev: SensorHistoryPoint, cur: SensorHistoryPoint, gapMs: number): boolean {
-  if (cur.timestamp - prev.timestamp > gapMs) return false;
-  const a = prev.deviceOnlineSince?.trim();
-  const b = cur.deviceOnlineSince?.trim();
-  if (a && b && a !== b) return false;
-  return true;
-}
+/**
+ * Cumulative depth rise (m) from a local minimum required to confirm the pump has started.
+ * Filters out sensor noise (~0.01–0.02 m jitter).
+ */
+export const PUMP_START_RISE_M = 0.05;
 
-export function segmentIntoPumpEvents(
-  sortedPoints: SensorHistoryPoint[],
-  gapMs: number = DEFAULT_PUMP_GAP_MS,
-): SensorHistoryPoint[][] {
+/**
+ * Decline (m) from the run's peak depth required to confirm the pump has stopped
+ * (water level recovering). The run is closed AT the peak, so recovery samples
+ * are never counted inside the run.
+ */
+export const PUMP_STOP_RECOVERY_M = 0.03;
+
+/**
+ * Split points into device power-on sessions using `deviceOnlineSince`.
+ * A new session starts only when both neighbours carry a stamp and they differ,
+ * so points without a stamp stay attached to the current session. If no point
+ * has a stamp, the whole series is one session.
+ */
+function splitIntoOnlineSessions(sortedPoints: SensorHistoryPoint[]): SensorHistoryPoint[][] {
   if (sortedPoints.length === 0) return [];
-  const events: SensorHistoryPoint[][] = [];
+  const sessions: SensorHistoryPoint[][] = [];
   let current: SensorHistoryPoint[] = [sortedPoints[0]];
   for (let i = 1; i < sortedPoints.length; i++) {
-    const prev = sortedPoints[i - 1];
-    const cur = sortedPoints[i];
-    if (!samePumpRun(prev, cur, gapMs)) {
-      events.push(current);
-      current = [cur];
+    const a = sortedPoints[i - 1].deviceOnlineSince?.trim();
+    const b = sortedPoints[i].deviceOnlineSince?.trim();
+    if (a && b && a !== b) {
+      sessions.push(current);
+      current = [sortedPoints[i]];
     } else {
-      current.push(cur);
+      current.push(sortedPoints[i]);
     }
   }
-  events.push(current);
+  sessions.push(current);
+  return sessions;
+}
+
+/**
+ * Detect actual pumping intervals inside one power-on session from the depth trend.
+ *
+ * The device can stay online through pumping AND recovery, so `deviceOnlineSince`
+ * alone cannot mark pump start/stop. Physically: while the pump runs, depth-to-water
+ * RISES (drawdown); once it stops, depth FALLS back (recovery). So:
+ *   - a run STARTS at a local minimum once depth has risen ≥ PUMP_START_RISE_M
+ *   - a run ENDS at the peak once depth has fallen ≥ PUMP_STOP_RECOVERY_M from it
+ * Recovery samples after the peak are excluded, so drawdown is never cancelled out.
+ */
+function detectPumpRunsInSession(session: SensorHistoryPoint[]): SensorHistoryPoint[][] {
+  const runs: SensorHistoryPoint[][] = [];
+  if (session.length < 2) return runs;
+
+  let pumping = false;
+  let minIdx = 0; // candidate run start (local minimum) while idle
+  let peakIdx = 0; // highest depth seen during the current run
+
+  for (let i = 1; i < session.length; i++) {
+    const depth = session[i].depth;
+
+    if (!pumping) {
+      if (depth <= session[minIdx].depth) {
+        minIdx = i;
+      } else if (depth - session[minIdx].depth >= PUMP_START_RISE_M) {
+        pumping = true;
+        peakIdx = i;
+      }
+    } else {
+      if (depth >= session[peakIdx].depth) {
+        peakIdx = i;
+      } else if (session[peakIdx].depth - depth >= PUMP_STOP_RECOVERY_M) {
+        // Recovery confirmed — close the run at its peak (actual pump stop)
+        runs.push(session.slice(minIdx, peakIdx + 1));
+        pumping = false;
+        minIdx = i;
+      }
+    }
+  }
+
+  if (pumping) {
+    runs.push(session.slice(minIdx, peakIdx + 1));
+  }
+  return runs;
+}
+
+/**
+ * Segment readings into pump runs: group by `deviceOnlineSince` power-on session,
+ * then detect pumping intervals within each session from the depth trend.
+ * No fixed time-gap rule; recovery periods are excluded from runs.
+ */
+export function segmentIntoPumpEvents(sortedPoints: SensorHistoryPoint[]): SensorHistoryPoint[][] {
+  if (sortedPoints.length === 0) return [];
+  const events: SensorHistoryPoint[][] = [];
+  for (const session of splitIntoOnlineSessions(sortedPoints)) {
+    events.push(...detectPumpRunsInSession(session));
+  }
   return events;
 }
 
