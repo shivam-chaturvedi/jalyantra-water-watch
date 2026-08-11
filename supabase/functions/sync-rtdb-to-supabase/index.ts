@@ -154,41 +154,55 @@ serve(async (req: Request) => {
         wellDistrictMap.set(wellId, district);
         if (state) wellStateMap.set(wellId, state);
 
-        const locationPayload: Record<string, unknown> = {
-          location_id: locationId,
-          village_city: String(meta.siteName || "").trim() || district,
-          taluka: String(meta.taluka || "").trim() || district,
-          district,
-          latitude: lat,
-          longitude: long,
-          status: "Active",
-        };
-        if (state) locationPayload.state = state;
-        await supabase.from("location_master").upsert(locationPayload, { onConflict: "location_id" });
+        // location_id, village_city, taluka, district, state are set once at creation and must
+        // never change afterward — the sync only ever INSERTs a new location, never updates these.
+        const locationExists = locationById.has(locationId);
+        if (!locationExists) {
+          const locationPayload: Record<string, unknown> = {
+            location_id: locationId,
+            village_city: String(meta.siteName || "").trim() || district,
+            taluka: String(meta.taluka || "").trim() || district,
+            district,
+            latitude: lat,
+            longitude: long,
+            status: "Active",
+          };
+          if (state) locationPayload.state = state;
+          await supabase.from("location_master").insert(locationPayload);
+          locationById.set(locationId, { location_id: locationId, district, state });
+        } else {
+          await supabase.from("location_master").update({ latitude: lat, longitude: long, status: "Active" }).eq("location_id", locationId);
+        }
 
+        // location_id, well_name, well_depth_meters, well_diameter_meters are locked once a well
+        // exists — only pump metadata/status may be refreshed here; edit the rest via the SQL editor.
         const wellExists = existingWellById.has(wellId);
-        const wellPatch: Record<string, unknown> = {
-          location_id: locationId,
-          well_name: String(meta.siteName || "").trim() || `Well ${deviceId}`,
-          status: "Active",
-        };
-        if (firebaseWellDepth != null) wellPatch.well_depth_meters = firebaseWellDepth;
-        if (firebaseWellDiameter != null) wellPatch.well_diameter_meters = firebaseWellDiameter;
-        if (firebasePumpIntake != null) wellPatch.pump_intake_level_meters = firebasePumpIntake;
-        if (meta.pumpAttached !== undefined) wellPatch.pump_attached = Boolean(meta.pumpAttached);
-        if (meta.pumpType) wellPatch.pump_type = String(meta.pumpType);
-
         let wellReady = wellExists;
         if (wellExists) {
-          await supabase.from("well_master").update(wellPatch).eq("well_id", wellId);
+          const wellUpdatePatch: Record<string, unknown> = { status: "Active" };
+          if (firebasePumpIntake != null) wellUpdatePatch.pump_intake_level_meters = firebasePumpIntake;
+          if (meta.pumpAttached !== undefined) wellUpdatePatch.pump_attached = Boolean(meta.pumpAttached);
+          if (meta.pumpType) wellUpdatePatch.pump_type = String(meta.pumpType);
+          await supabase.from("well_master").update(wellUpdatePatch).eq("well_id", wellId);
         } else if (firebaseWellDepth != null && firebaseWellDiameter != null) {
-          await supabase.from("well_master").insert({
+          const wellInsertPayload: Record<string, unknown> = {
             well_id: wellId,
-            ...wellPatch,
+            location_id: locationId,
+            well_name: String(meta.siteName || "").trim() || `Well ${deviceId}`,
+            well_depth_meters: firebaseWellDepth,
+            well_diameter_meters: firebaseWellDiameter,
+            status: "Active",
+          };
+          if (firebasePumpIntake != null) wellInsertPayload.pump_intake_level_meters = firebasePumpIntake;
+          if (meta.pumpAttached !== undefined) wellInsertPayload.pump_attached = Boolean(meta.pumpAttached);
+          if (meta.pumpType) wellInsertPayload.pump_type = String(meta.pumpType);
+          await supabase.from("well_master").insert(wellInsertPayload);
+          existingWellById.set(wellId, {
+            well_id: wellId,
+            location_id: locationId,
             well_depth_meters: firebaseWellDepth,
             well_diameter_meters: firebaseWellDiameter,
           });
-          existingWellById.set(wellId, { well_id: wellId, ...wellPatch });
           wellReady = true;
         } else {
           console.warn(
