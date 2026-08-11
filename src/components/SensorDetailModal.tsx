@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, MapPin, Activity, Clock, Download, Signal, Thermometer, BarChart3 } from 'lucide-react';
 import {
@@ -11,6 +11,7 @@ import {
   sensorHistoryPointsToCsvRows,
   sensorsDashboardExportRows,
 } from '@/lib/data';
+import { supabase } from '@/lib/supabaseClient';
 import {
   buildPumpRunSegments,
   computeDailyMedianDepths,
@@ -43,8 +44,35 @@ interface SensorDetailModalProps {
 export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: SensorDetailModalProps) {
   const [nonPumpRange, setNonPumpRange] = useState<NonPumpRangePreset>('month');
   const [pumpRange, setPumpRange] = useState<PumpDrawdownRangePreset>('48h');
+  const [locationDetails, setLocationDetails] = useState<{ villageCity: string | null; taluka: string | null } | null>(null);
 
   const pumpConnected = sensor ? isPumpConnectedDevice(sensor) : true;
+
+  useEffect(() => {
+    if (!sensor) {
+      setLocationDetails(null);
+      return;
+    }
+    let cancelled = false;
+    setLocationDetails(null);
+    const wellId = `WEL-${sensor.deviceId}`;
+    supabase
+      .from('well_master')
+      .select('location_master(village_city, taluka)')
+      .eq('well_id', wellId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return;
+        const location = (data as any)?.location_master ?? null;
+        setLocationDetails({
+          villageCity: location?.village_city ?? null,
+          taluka: location?.taluka ?? null,
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sensor?.deviceId]);
 
   const latestTimestamp = useMemo(() => {
     const history = sensor?.history ?? [];
@@ -240,12 +268,12 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
                   </h3>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <p className="text-xs text-muted-foreground">Latitude</p>
-                      <p className="font-mono font-medium">{sensor.lat.toFixed(4)}°N</p>
+                      <p className="text-xs text-muted-foreground">Village</p>
+                      <p className="font-medium">{locationDetails?.villageCity ?? '—'}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Longitude</p>
-                      <p className="font-mono font-medium">{sensor.long.toFixed(4)}°E</p>
+                      <p className="text-xs text-muted-foreground">Taluka</p>
+                      <p className="font-medium">{locationDetails?.taluka ?? '—'}</p>
                     </div>
                   </div>
                 </div>
