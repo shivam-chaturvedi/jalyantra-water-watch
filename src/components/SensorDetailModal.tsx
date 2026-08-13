@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, MapPin, Activity, Clock, Download, Signal, Thermometer, BarChart3 } from 'lucide-react';
+import { X, MapPin, Activity, Clock, Download, Signal, Thermometer, BarChart3, AlertTriangle } from 'lucide-react';
 import {
   SensorReading,
   formatLastSyncDate,
@@ -45,6 +45,10 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
   const [nonPumpRange, setNonPumpRange] = useState<NonPumpRangePreset>('month');
   const [pumpRange, setPumpRange] = useState<PumpDrawdownRangePreset>('48h');
   const [locationDetails, setLocationDetails] = useState<{ villageCity: string | null; taluka: string | null } | null>(null);
+  const [wellAlerts, setWellAlerts] = useState<
+    { alertCode: string; alertName: string | null; triggerValue: string; status: string; triggeredAt: string }[]
+  >([]);
+  const [alertsLoading, setAlertsLoading] = useState(false);
 
   const pumpConnected = sensor ? isPumpConnectedDevice(sensor) : true;
 
@@ -68,6 +72,38 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
           villageCity: location?.village_city ?? null,
           taluka: location?.taluka ?? null,
         });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sensor?.deviceId]);
+
+  useEffect(() => {
+    if (!sensor) {
+      setWellAlerts([]);
+      return;
+    }
+    let cancelled = false;
+    setAlertsLoading(true);
+    const wellId = `WEL-${sensor.deviceId}`;
+    supabase
+      .from('alert_logs')
+      .select('alert_code, trigger_value, status, triggered_at, alert_definitions(alert_name)')
+      .eq('well_id', wellId)
+      .order('triggered_at', { ascending: false })
+      .limit(10)
+      .then(({ data }) => {
+        if (cancelled) return;
+        setWellAlerts(
+          (data || []).map((row: any) => ({
+            alertCode: row.alert_code,
+            alertName: row.alert_definitions?.alert_name ?? null,
+            triggerValue: row.trigger_value,
+            status: row.status,
+            triggeredAt: row.triggered_at,
+          }))
+        );
+        setAlertsLoading(false);
       });
     return () => {
       cancelled = true;
@@ -276,6 +312,42 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
                       <p className="font-medium">{locationDetails?.taluka ?? '—'}</p>
                     </div>
                   </div>
+                </div>
+
+                <div className="jal-card">
+                  <h3 className="font-semibold text-sm text-foreground mb-3 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-accent" />
+                    Alerts
+                  </h3>
+                  {alertsLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading…</p>
+                  ) : wellAlerts.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No alerts logged for this well.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {wellAlerts.map((alert, idx) => (
+                        <div
+                          key={`${alert.alertCode}-${alert.triggeredAt}-${idx}`}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-sm"
+                        >
+                          <div>
+                            <p className="font-medium text-foreground">{alert.alertName || alert.alertCode}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {alert.triggerValue} · {new Date(alert.triggeredAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' })}
+                            </p>
+                          </div>
+                          <span
+                            className={cn(
+                              'badge-squared text-white shrink-0',
+                              alert.status === 'active' ? 'bg-depth-warning' : 'bg-muted-foreground'
+                            )}
+                          >
+                            {alert.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {pumpConnected ? (
