@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(lsof -iTCP -sTCP:LISTEN -P)",
+      "Bash(curl -sf http://localhost:8082/dashboard)"
+    ]
+  }
+}
