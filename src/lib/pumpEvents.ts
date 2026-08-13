@@ -6,6 +6,9 @@ export const PUMP_CHART_MA_WINDOW = 5;
 /** Depth step for plotted points after smoothing (display only; keep 0.02–0.05). */
 export const PUMP_CHART_DEPTH_DISPLAY_STEP = 0.04;
 
+/** Minimum depth increase from surface that counts as real pumping drawdown. */
+export const MIN_PUMP_DRAWDOWN_M = 0.02;
+
 const Y_AXIS_PAD_M = 0.25;
 const Y_AXIS_MIN_SPAN_M = 0.5;
 
@@ -325,6 +328,7 @@ function trimTerminalDepthPlateauForChart(
 interface PumpRunChartOptions {
   windowSize?: number;
   displayStep?: number;
+  minDrawdownMeters?: number;
 }
 
 export type PumpRunSegment = {
@@ -358,20 +362,21 @@ export function buildPumpRunSegments(
 ): PumpRunSegment[] {
   const windowSize = Math.min(5, Math.max(3, options?.windowSize ?? PUMP_CHART_MA_WINDOW));
   const displayStep = options?.displayStep ?? PUMP_CHART_DEPTH_DISPLAY_STEP;
+  const minDrawdownMeters = options?.minDrawdownMeters ?? MIN_PUMP_DRAWDOWN_M;
   const segments: PumpRunSegment[] = [];
+  events.forEach((ev) => {
+    if (ev.length < 2) return;
+    const stats = statsForEvent(ev);
+    if (stats.drawdown < minDrawdownMeters || stats.durationMin <= 0) return;
 
-  //made some changes here
-  events.forEach((ev, idx) => {
-    if (!ev.length) return;
     const { ev: evChart, smoothed } = smoothEventForChart(ev, windowSize, displayStep);
     if (!evChart.length) return;
     const startPoint = evChart[0];
-    // Used the RAW last point (not the trimmed chart point) so the displayed
+    // Use the RAW last point (not the trimmed chart point) so the displayed
     // "End" time always matches the same window that durationMin measures.
     const rawEndPoint = ev[ev.length - 1];
-    const stats = statsForEvent(ev);
     segments.push({
-      runIndex: idx + 1,
+      runIndex: segments.length + 1,
       startPoint,
       endPoint: rawEndPoint,
       startLabel: chartPointLabel(startPoint),
@@ -545,7 +550,7 @@ export function statsForEvent(ev: SensorHistoryPoint[]): PumpEventStats {
   const initial = ev[0].depth;
   const finalD = ev[ev.length - 1].depth;
   const drawdown = finalD - initial;
-  let durationMs = Math.max(0, ev[ev.length - 1].timestamp - ev[0].timestamp);
+  const durationMs = Math.max(0, ev[ev.length - 1].timestamp - ev[0].timestamp);
   let durationMin = durationMs / (60 * 1000);
   if (durationMin <= 0) {
     const firstU = ev[0].uptimeSeconds;
@@ -574,8 +579,11 @@ export function summarize24h(points: SensorHistoryPoint[]): Summary24h {
     return { currentWaterLevel: null, pumpRuns: 0, maxDrawdown: 0, avgDrawdownRate: 0, runsWithDuration: 0 };
   }
   const events = segmentIntoPumpEvents(points);
-  const stats = events.map(statsForEvent);
-  const drawdowns = stats.map((s) => Math.max(0, s.drawdown));
+  const stats = events
+    .filter((ev) => ev.length >= 2)
+    .map(statsForEvent)
+    .filter((s) => s.drawdown >= MIN_PUMP_DRAWDOWN_M && s.durationMin > 0);
+  const drawdowns = stats.map((s) => s.drawdown);
   const maxDrawdown = drawdowns.length ? Math.max(...drawdowns) : 0;
   const withDuration = stats.filter((s) => s.durationMin > 0);
   const avgDrawdownRate = withDuration.length
@@ -584,7 +592,7 @@ export function summarize24h(points: SensorHistoryPoint[]): Summary24h {
   const last = points[points.length - 1];
   return {
     currentWaterLevel: last.depth,
-    pumpRuns: events.length,
+    pumpRuns: stats.length,
     maxDrawdown,
     avgDrawdownRate,
     runsWithDuration: withDuration.length,
