@@ -3511,8 +3511,11 @@ function MasterTablesSection() {
                   const district =
                     String(meta.district || meta.districtName || '').trim() || matchDistrictName(lat, long);
                   const state = String(meta.state || '').trim();
-                  const locationId = `LOC-${district.toUpperCase().replace(/\s+/g, '-')}`;
                   const wellId = `WEL-${deviceId}`;
+                  // Reuse the well's own curated location_id if it already exists — recomputing a generic
+                  // district guess here would create a second, unused location row disconnected from the well.
+                  const existingWell = existingWellById.get(wellId);
+                  const locationId = existingWell?.location_id || `LOC-${district.toUpperCase().replace(/\s+/g, '-')}`;
 
                   // Physical dims ONLY from Firebase meta (never meta.depth water-level reading, never defaults)
                   const firebaseWellDepth = optionalPositive(meta.wellDepth ?? meta.wellDepthMeters);
@@ -3527,29 +3530,41 @@ function MasterTablesSection() {
                   wellDistrictMap.set(wellId, district);
                   if (state) wellStateMap.set(wellId, state);
 
+                  // Only create a new location for a device that actually resolves to a real well — either
+                  // one that already exists, or one with real Firebase depth/diameter data to create now.
+                  // Otherwise Firebase devices with no curated well (test devices, decommissioned units,
+                  // not-yet-onboarded units) leave behind orphaned generic-district location rows forever.
+                  const wellExists = !!existingWell;
+                  const wellWillBeReady = wellExists || (firebaseWellDepth != null && firebaseWellDiameter != null);
+
                   // location_id, village_city, taluka, district, state are set once at creation and must
                   // never change afterward — the sync only ever INSERTs a new location, never updates these.
                   const locationExists = locationById.has(locationId);
                   if (!locationExists) {
-                    const locationPayload: Record<string, unknown> = {
-                      location_id: locationId,
-                      village_city: String(meta.siteName || '').trim() || district,
-                      taluka: String(meta.taluka || '').trim() || district,
-                      district,
-                      latitude: lat,
-                      longitude: long,
-                      status: 'Active',
-                    };
-                    if (state) locationPayload.state = state;
-                    await supabase.from('location_master').insert(locationPayload);
-                    locationById.set(locationId, { location_id: locationId, district, state });
+                    if (wellWillBeReady) {
+                      const locationPayload: Record<string, unknown> = {
+                        location_id: locationId,
+                        village_city: String(meta.siteName || '').trim() || district,
+                        taluka: String(meta.taluka || '').trim() || district,
+                        district,
+                        latitude: lat,
+                        longitude: long,
+                        status: 'Active',
+                      };
+                      if (state) locationPayload.state = state;
+                      await supabase.from('location_master').insert(locationPayload);
+                      locationById.set(locationId, { location_id: locationId, district, state });
+                    } else {
+                      console.warn(
+                        `[Firebase Sync] Skipping new location_master for ${locationId}: device ${deviceId} has no known/creatable well`,
+                      );
+                    }
                   } else {
                     await supabase.from('location_master').update({ latitude: lat, longitude: long, status: 'Active' }).eq('location_id', locationId);
                   }
 
                   // location_id, well_name, well_depth_meters, well_diameter_meters are locked once a well
                   // exists — only pump metadata/status may be refreshed here; edit the rest via the SQL editor.
-                  const wellExists = existingWellById.has(wellId);
                   let wellReady = wellExists;
                   if (wellExists) {
                     const wellUpdatePatch: Record<string, unknown> = { status: 'Active' };
