@@ -91,7 +91,7 @@ export function SensorDetailModal({ sensor, isOpen, onClose, onViewHistory }: Se
       .select('alert_code, trigger_value, status, triggered_at, alert_definitions(alert_name)')
       .eq('well_id', wellId)
       .order('triggered_at', { ascending: false })
-      .limit(10)
+      .limit(1)
       .then(({ data }) => {
         if (cancelled) return;
         setWellAlerts(
