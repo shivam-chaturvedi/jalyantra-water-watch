@@ -74,7 +74,12 @@ serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
 
     const targetRtdbUrl = body.firebaseRtdbUrl || firebaseRtdbUrl;
-    console.log(`Syncing RTDB data from ${targetRtdbUrl}`);
+    // Bound how much history each invocation processes -- unlike Admin.tsx (which has always had this via
+    // its UI time-range dropdown), this function had no limit at all, so it kept every reading Firebase ever
+    // returned in memory at once. That's what caused the WORKER_RESOURCE_LIMIT (OOM) once the table grew large.
+    const readingsWindowDays = Number(body.readingsWindowDays) > 0 ? Number(body.readingsWindowDays) : 30;
+    const readingsCutoffMs = Date.now() - readingsWindowDays * 24 * 60 * 60 * 1000;
+    console.log(`Syncing RTDB data from ${targetRtdbUrl} (last ${readingsWindowDays} days of readings)`);
 
     // 1. Fetch devices and readings nodes from Firebase
     const authQuery = firebaseApiKey ? `?auth=${firebaseApiKey}` : "";
@@ -84,7 +89,9 @@ serve(async (req: Request) => {
     ]);
 
     const devicesData = devicesRes && devicesRes.ok ? await devicesRes.json() : {};
-    const readingsData = readingsRes && readingsRes.ok ? await readingsRes.json() : {};
+    // deno-lint-ignore prefer-const -- explicitly freed below once extracted; the raw Firebase payload
+    // (every reading, before windowing/dedup) is the single largest thing in memory for this function.
+    let readingsData = readingsRes && readingsRes.ok ? await readingsRes.json() : {};
 
     let syncedDevicesCount = 0;
     let syncedReadingsCount = 0;
@@ -266,9 +273,12 @@ serve(async (req: Request) => {
         string,
         { wells: Set<string>; depthSum: number; depthCount: number; extraction: number; runtime: number }
       >();
-      const rawRowsToInsert: Record<string, unknown>[] = [];
+      // Dedup directly into the map being upserted -- avoids holding a second, near-duplicate array of
+      // every reading in memory at once (that plus the full Firebase payload is what drove OOM before).
+      const uniqueRowsMap = new Map<string, Record<string, unknown>>();
       let minReadingMs = Number.POSITIVE_INFINITY;
       let maxReadingMs = Number.NEGATIVE_INFINITY;
+      let skippedOldCount = 0;
 
       for (const [batchKey, batchNode] of Object.entries(readingsData)) {
         if (!batchNode || typeof batchNode !== "object") continue;
@@ -296,16 +306,23 @@ serve(async (req: Request) => {
           const readingTimestamp = new Date(timestamp).toISOString();
           const readingTimeMs = Date.parse(readingTimestamp);
           if (Number.isNaN(readingTimeMs)) continue;
+          if (readingTimeMs < readingsCutoffMs) {
+            skippedOldCount++;
+            continue;
+          }
           const readingDate = readingTimestamp.split("T")[0];
 
-          rawRowsToInsert.push({
-            device_id: deviceId,
-            well_id: existingWellById.has(wellId) ? wellId : null,
-            depth_meters: depth,
-            timestamp: readingTimestamp,
-            uptime: r.uptimeSeconds || null,
-            online_since: r.deviceOnlineSince ? new Date(r.deviceOnlineSince).toISOString() : null,
-          });
+          const key = `${deviceId}_${readingTimestamp}`;
+          if (!uniqueRowsMap.has(key)) {
+            uniqueRowsMap.set(key, {
+              device_id: deviceId,
+              well_id: existingWellById.has(wellId) ? wellId : null,
+              depth_meters: depth,
+              timestamp: readingTimestamp,
+              uptime: r.uptimeSeconds || null,
+              online_since: r.deviceOnlineSince ? new Date(r.deviceOnlineSince).toISOString() : null,
+            });
+          }
           if (readingTimeMs < minReadingMs) minReadingMs = readingTimeMs;
           if (readingTimeMs > maxReadingMs) maxReadingMs = readingTimeMs;
 
@@ -321,24 +338,30 @@ serve(async (req: Request) => {
           }
         }
       }
-
-      // Bulk upsert raw telemetry — dedupe in memory first, then only check for existing rows within
-      // the actual timestamp range being synced (not the whole table, which only grows over time).
-      const uniqueRowsMap = new Map<string, Record<string, unknown>>();
-      for (const row of rawRowsToInsert) {
-        const key = `${row.device_id}_${row.timestamp}`;
-        if (!uniqueRowsMap.has(key)) uniqueRowsMap.set(key, row);
+      if (skippedOldCount > 0) {
+        console.log(`Skipped ${skippedOldCount} readings older than the ${readingsWindowDays}-day window`);
       }
-      const deduplicatedRows = Array.from(uniqueRowsMap.values());
+      // Everything needed has been extracted into wellReadingsByDate/uniqueRowsMap above -- drop the
+      // reference to the raw Firebase payload so it can be garbage-collected before the heavier
+      // pump-run-detection and derived-metrics work below.
+      readingsData = null;
 
-      if (deduplicatedRows.length > 0) {
+      // Bulk upsert raw telemetry — only check for existing rows within the actual timestamp range
+      // being synced (not the whole table, which only grows over time).
+      if (uniqueRowsMap.size > 0) {
         const { data: existingRecords } = await supabase
           .from("raw_sensor_data")
           .select("device_id, timestamp")
           .gte("timestamp", new Date(minReadingMs).toISOString())
           .lte("timestamp", new Date(maxReadingMs).toISOString());
         const existingKeysSet = new Set((existingRecords || []).map((r: any) => `${r.device_id}_${r.timestamp}`));
-        const rowsToUpsert = deduplicatedRows.filter((r) => !existingKeysSet.has(`${r.device_id}_${r.timestamp}`));
+
+        const rowsToUpsert: Record<string, unknown>[] = [];
+        for (const [key, row] of uniqueRowsMap) {
+          if (!existingKeysSet.has(key)) rowsToUpsert.push(row);
+        }
+        uniqueRowsMap.clear();
+        existingKeysSet.clear();
 
         for (let i = 0; i < rowsToUpsert.length; i += 200) {
           const chunk = rowsToUpsert.slice(i, i + 200);
