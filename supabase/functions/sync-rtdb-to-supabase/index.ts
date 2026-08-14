@@ -111,14 +111,21 @@ serve(async (req: Request) => {
     const wellDistrictMap = new Map<string, string>();
     const wellStateMap = new Map<string, string>();
 
-    // Dedup LOW_WATER_LEVEL alerts by (well_id, underlying reading date) so re-running the sync over
-    // the same historical window never raises a second alert for a day already logged.
+    // Dedup LOW_WATER_LEVEL/DRY_RUN_RISK alerts by (well_id, underlying reading date) so re-running
+    // the sync over the same historical window never raises a second alert for a day already logged.
     const { data: existingLowWaterAlerts } = await supabase
       .from("alert_logs")
       .select("well_id, triggered_at")
       .eq("alert_code", "LOW_WATER_LEVEL");
     const lowWaterAlertedDates = new Set<string>(
       (existingLowWaterAlerts || []).map((a: any) => `${a.well_id}_${String(a.triggered_at).slice(0, 10)}`)
+    );
+    const { data: existingDryRunAlerts } = await supabase
+      .from("alert_logs")
+      .select("well_id, triggered_at")
+      .eq("alert_code", "DRY_RUN_RISK");
+    const dryRunAlertedDates = new Set<string>(
+      (existingDryRunAlerts || []).map((a: any) => `${a.well_id}_${String(a.triggered_at).slice(0, 10)}`)
     );
 
     const { data: existingWells } = await supabase
@@ -547,17 +554,21 @@ serve(async (req: Request) => {
           }, { onConflict: "well_id, date" });
 
           if (dryRunRisk && safetyBuffer != null) {
-            await supabase.from("alert_logs").insert({
-              alert_code: "DRY_RUN_RISK",
-              well_id: wellId,
-              district: district || null,
-              state: state || null,
-              alert_type: "warning",
-              trigger_field: "safetyBufferMeters",
-              trigger_value: `${safetyBuffer.toFixed(2)}m`,
-              status: "active",
-              triggered_at: new Date().toISOString(),
-            });
+            const dryRunAlertKey = `${wellId}_${dateStr}`;
+            if (!dryRunAlertedDates.has(dryRunAlertKey)) {
+              await supabase.from("alert_logs").insert({
+                alert_code: "DRY_RUN_RISK",
+                well_id: wellId,
+                district: district || null,
+                state: state || null,
+                alert_type: "warning",
+                trigger_field: "safetyBufferMeters",
+                trigger_value: `${safetyBuffer.toFixed(2)}m`,
+                status: "active",
+                triggered_at: new Date(`${dateStr}T12:00:00.000Z`).toISOString(),
+              });
+              dryRunAlertedDates.add(dryRunAlertKey);
+            }
           }
 
           if (lowWaterLevel) {
