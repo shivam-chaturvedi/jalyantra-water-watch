@@ -266,6 +266,9 @@ serve(async (req: Request) => {
         string,
         { wells: Set<string>; depthSum: number; depthCount: number; extraction: number; runtime: number }
       >();
+      const rawRowsToInsert: Record<string, unknown>[] = [];
+      let minReadingMs = Number.POSITIVE_INFINITY;
+      let maxReadingMs = Number.NEGATIVE_INFINITY;
 
       for (const [batchKey, batchNode] of Object.entries(readingsData)) {
         if (!batchNode || typeof batchNode !== "object") continue;
@@ -291,10 +294,11 @@ serve(async (req: Request) => {
           }
 
           const readingTimestamp = new Date(timestamp).toISOString();
-          if (Number.isNaN(Date.parse(readingTimestamp))) continue;
+          const readingTimeMs = Date.parse(readingTimestamp);
+          if (Number.isNaN(readingTimeMs)) continue;
           const readingDate = readingTimestamp.split("T")[0];
 
-          await supabase.from("raw_sensor_data").insert({
+          rawRowsToInsert.push({
             device_id: deviceId,
             well_id: existingWellById.has(wellId) ? wellId : null,
             depth_meters: depth,
@@ -302,13 +306,13 @@ serve(async (req: Request) => {
             uptime: r.uptimeSeconds || null,
             online_since: r.deviceOnlineSince ? new Date(r.deviceOnlineSince).toISOString() : null,
           });
-
-          syncedReadingsCount++;
+          if (readingTimeMs < minReadingMs) minReadingMs = readingTimeMs;
+          if (readingTimeMs > maxReadingMs) maxReadingMs = readingTimeMs;
 
           if (!wellReadingsByDate.has(wellId)) wellReadingsByDate.set(wellId, new Map());
           const dateMap = wellReadingsByDate.get(wellId)!;
           if (!dateMap.has(readingDate)) dateMap.set(readingDate, []);
-          dateMap.get(readingDate)!.push({ depth, timestampMs: Date.parse(readingTimestamp) });
+          dateMap.get(readingDate)!.push({ depth, timestampMs: readingTimeMs });
 
           // Capture district from Firebase reading when present
           const readingDistrict = String(r.district || "").trim();
@@ -316,6 +320,31 @@ serve(async (req: Request) => {
             wellDistrictMap.set(wellId, readingDistrict);
           }
         }
+      }
+
+      // Bulk upsert raw telemetry — dedupe in memory first, then only check for existing rows within
+      // the actual timestamp range being synced (not the whole table, which only grows over time).
+      const uniqueRowsMap = new Map<string, Record<string, unknown>>();
+      for (const row of rawRowsToInsert) {
+        const key = `${row.device_id}_${row.timestamp}`;
+        if (!uniqueRowsMap.has(key)) uniqueRowsMap.set(key, row);
+      }
+      const deduplicatedRows = Array.from(uniqueRowsMap.values());
+
+      if (deduplicatedRows.length > 0) {
+        const { data: existingRecords } = await supabase
+          .from("raw_sensor_data")
+          .select("device_id, timestamp")
+          .gte("timestamp", new Date(minReadingMs).toISOString())
+          .lte("timestamp", new Date(maxReadingMs).toISOString());
+        const existingKeysSet = new Set((existingRecords || []).map((r: any) => `${r.device_id}_${r.timestamp}`));
+        const rowsToUpsert = deduplicatedRows.filter((r) => !existingKeysSet.has(`${r.device_id}_${r.timestamp}`));
+
+        for (let i = 0; i < rowsToUpsert.length; i += 200) {
+          const chunk = rowsToUpsert.slice(i, i + 200);
+          await supabase.from("raw_sensor_data").upsert(chunk, { onConflict: "device_id,timestamp", ignoreDuplicates: true });
+        }
+        syncedReadingsCount += rowsToUpsert.length;
       }
 
       // 3.5. Detect Pump Runs from Raw Depth Readings & Insert into pump_run_summary (C)
