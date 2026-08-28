@@ -143,6 +143,58 @@ export const PUMP_START_RISE_M = 0.05;
 export const PUMP_STOP_RECOVERY_M = 0.03;
 
 /**
+ * Max gap (minutes) between one run's end and the next run's start, within the same power-on
+ * session, for them to be merged into one continuous pumping episode instead of counted as two
+ * separate runs. Real-world pump cycles are reported as a handful of times PER DAY (hours apart) —
+ * even a 30-40 minute same-session gap is still a sensor/water-table wobble splitting one pumping
+ * episode in two, not a real restart. (Raised from 5 to 30 after live data on well 12 showed runs
+ * only 6-40 minutes apart were still surviving as separate "runs" under the 5-minute window.)
+ */
+export const PUMP_RUN_MERGE_GAP_MIN = 30;
+
+/**
+ * Minimum total duration (minutes) for a (post-merge) run to be counted as a real pump cycle at
+ * all, rather than a single noisy 1-2 minute wiggle. Reported real-world pump cycles run far longer
+ * than this floor — a "run" shorter than it is sensor noise crossing PUMP_START_RISE_M /
+ * PUMP_STOP_RECOVERY_M for one sample, not an actual pump start/stop.
+ */
+export const MIN_PUMP_RUN_DURATION_MIN = 3;
+
+/**
+ * Cap on how long a chain of merges can grow. Without this, a pump cycling on/off every 15-25
+ * minutes all day (every individual gap passes PUMP_RUN_MERGE_GAP_MIN) gets welded into one
+ * day-spanning "run" — e.g. a real case merged into a single 989-minute (16.5h) run. 4 hours is
+ * generous for one real continuous/closely-cycling pumping session; once a chain would exceed it,
+ * stop extending and start a new run instead, even if the next individual gap is still small.
+ */
+export const MAX_MERGED_RUN_DURATION_MIN = 4 * 60;
+
+/**
+ * Merge index ranges whose gap (time between one range's end sample and the next range's start
+ * sample) is within PUMP_RUN_MERGE_GAP_MIN, so noisy dips mid-run don't fragment one pumping
+ * episode into several. Ranges list is assumed sorted and non-overlapping (as produced by the
+ * single forward pass in detectPumpRunsInSession).
+ */
+function mergeAdjacentRanges(
+  session: SensorHistoryPoint[],
+  ranges: { startIdx: number; endIdx: number }[],
+): { startIdx: number; endIdx: number }[] {
+  if (ranges.length <= 1) return ranges;
+  const merged: { startIdx: number; endIdx: number }[] = [{ ...ranges[0] }];
+  for (let i = 1; i < ranges.length; i++) {
+    const prev = merged[merged.length - 1];
+    const gapMin = (session[ranges[i].startIdx].timestamp - session[prev.endIdx].timestamp) / 60000;
+    const mergedDurationMin = (session[ranges[i].endIdx].timestamp - session[prev.startIdx].timestamp) / 60000;
+    if (gapMin <= PUMP_RUN_MERGE_GAP_MIN && mergedDurationMin <= MAX_MERGED_RUN_DURATION_MIN) {
+      prev.endIdx = ranges[i].endIdx;
+    } else {
+      merged.push({ ...ranges[i] });
+    }
+  }
+  return merged;
+}
+
+/**
  * Split points into device power-on sessions using `deviceOnlineSince`.
  * A new session starts only when both neighbours carry a stamp and they differ,
  * so points without a stamp stay attached to the current session. If no point
@@ -177,8 +229,8 @@ function splitIntoOnlineSessions(sortedPoints: SensorHistoryPoint[]): SensorHist
  * Recovery samples after the peak are excluded, so drawdown is never cancelled out.
  */
 function detectPumpRunsInSession(session: SensorHistoryPoint[]): SensorHistoryPoint[][] {
-  const runs: SensorHistoryPoint[][] = [];
-  if (session.length < 2) return runs;
+  const ranges: { startIdx: number; endIdx: number }[] = [];
+  if (session.length < 2) return [];
 
   let pumping = false;
   let minIdx = 0; // candidate run start (local minimum) while idle
@@ -199,7 +251,7 @@ function detectPumpRunsInSession(session: SensorHistoryPoint[]): SensorHistoryPo
         peakIdx = i;
       } else if (session[peakIdx].depth - depth >= PUMP_STOP_RECOVERY_M) {
         // Recovery confirmed — close the run at its peak (actual pump stop)
-        runs.push(session.slice(minIdx, peakIdx + 1));
+        ranges.push({ startIdx: minIdx, endIdx: peakIdx });
         pumping = false;
         minIdx = i;
       }
@@ -207,9 +259,11 @@ function detectPumpRunsInSession(session: SensorHistoryPoint[]): SensorHistoryPo
   }
 
   if (pumping) {
-    runs.push(session.slice(minIdx, peakIdx + 1));
+    ranges.push({ startIdx: minIdx, endIdx: peakIdx });
   }
-  return runs;
+
+  // Fold sensor-jitter fragments back together before slicing out the final run point-arrays.
+  return mergeAdjacentRanges(session, ranges).map((r) => session.slice(r.startIdx, r.endIdx + 1));
 }
 
 /**
@@ -367,7 +421,7 @@ export function buildPumpRunSegments(
   events.forEach((ev) => {
     if (ev.length < 2) return;
     const stats = statsForEvent(ev);
-    if (stats.drawdown < minDrawdownMeters || stats.durationMin <= 0) return;
+    if (stats.drawdown < minDrawdownMeters || stats.durationMin < MIN_PUMP_RUN_DURATION_MIN) return;
 
     const { ev: evChart, smoothed } = smoothEventForChart(ev, windowSize, displayStep);
     if (!evChart.length) return;
@@ -582,7 +636,7 @@ export function summarize24h(points: SensorHistoryPoint[]): Summary24h {
   const stats = events
     .filter((ev) => ev.length >= 2)
     .map(statsForEvent)
-    .filter((s) => s.drawdown >= MIN_PUMP_DRAWDOWN_M && s.durationMin > 0);
+    .filter((s) => s.drawdown >= MIN_PUMP_DRAWDOWN_M && s.durationMin >= MIN_PUMP_RUN_DURATION_MIN);
   const drawdowns = stats.map((s) => s.drawdown);
   const maxDrawdown = drawdowns.length ? Math.max(...drawdowns) : 0;
   const withDuration = stats.filter((s) => s.durationMin > 0);

@@ -3459,7 +3459,73 @@ function MasterTablesSection() {
 
               // Noise floor for pump-run detection — matches the PUMP_START_RISE_M reasoning in pumpEvents.ts
               const PUMP_MIN_RUN_DROP_M = 0.05;
-              const PUMP_MIN_RUN_DURATION_MS = 60_000;
+              // Readings arrive ~60s apart, so a 60s floor was a no-op (any 2-point run already clears
+              // it) — that's why wells kept logging dozens of 1-minute "runs" a day. Raised to
+              // meaningfully exceed the sampling interval, matching MIN_PUMP_RUN_DURATION_MIN in pumpEvents.ts.
+              const PUMP_MIN_RUN_DURATION_MS = 3 * 60_000;
+              // Max gap (minutes) between one run's end and the next run's start for them to be merged
+              // into one continuous pumping episode instead of counted as two separate runs. Real-world
+              // pump cycles are reported as a handful of times PER DAY (hours apart) — even a 30-40
+              // minute gap is still a sensor/water-table wobble splitting one pumping episode in two,
+              // not a real restart. (Raised from 5 to 30 after live data on well 12 showed runs only
+              // 6-40 minutes apart were still surviving as separate "runs" under the 5-minute window.)
+              // Mirrors PUMP_RUN_MERGE_GAP_MIN in pumpEvents.ts.
+              const PUMP_RUN_MERGE_GAP_MIN = 30;
+              // Cap on how long a chain of merges can grow. Without this, a pump cycling on/off every
+              // 15-25 minutes all day (every individual gap passes PUMP_RUN_MERGE_GAP_MIN) gets welded
+              // into one day-spanning "run" — e.g. a real case merged into a single 989-minute (16.5h)
+              // run. 4 hours is generous for one real continuous/closely-cycling pumping session; once
+              // a chain would exceed it, stop extending and start a new run instead, even if the next
+              // individual gap is still small.
+              const MAX_MERGED_RUN_DURATION_MIN = 4 * 60;
+
+              // Fold adjacent raw run ranges together when the gap between them is small — see
+              // PUMP_RUN_MERGE_GAP_MIN and MAX_MERGED_RUN_DURATION_MIN. `ranges` is assumed
+              // sorted/non-overlapping (single forward pass).
+              const mergeAdjacentRuns = (
+                sorted: { depth: number; timestampMs: number }[],
+                ranges: { startIdx: number; endIdx: number }[],
+              ): { startIdx: number; endIdx: number }[] => {
+                if (ranges.length <= 1) return ranges;
+                const merged: { startIdx: number; endIdx: number }[] = [{ ...ranges[0] }];
+                for (let i = 1; i < ranges.length; i++) {
+                  const prev = merged[merged.length - 1];
+                  const gapMin = (sorted[ranges[i].startIdx].timestampMs - sorted[prev.endIdx].timestampMs) / 60000;
+                  const mergedDurationMin = (sorted[ranges[i].endIdx].timestampMs - sorted[prev.startIdx].timestampMs) / 60000;
+                  if (gapMin <= PUMP_RUN_MERGE_GAP_MIN && mergedDurationMin <= MAX_MERGED_RUN_DURATION_MIN) {
+                    prev.endIdx = ranges[i].endIdx;
+                  } else {
+                    merged.push({ ...ranges[i] });
+                  }
+                }
+                return merged;
+              };
+
+              // PostgREST caps an unfiltered .select() at 1000 rows (db_max_rows) — pump_run_summary long
+              // ago grew past that, so a plain select silently returned an arbitrary ~7% slice of the
+              // table and corrupted every daily/weekly aggregate built from it. Page through with
+              // .range() until nothing is left.
+              const fetchAllRows = async (
+                table: string,
+                select: string,
+                orderColumn: string,
+                applyFilter?: (query: any) => any,
+              ): Promise<any[]> => {
+                const pageSize = 1000;
+                const rows: any[] = [];
+                let offset = 0;
+                while (true) {
+                  let query = supabase.from(table).select(select).order(orderColumn, { ascending: true });
+                  if (applyFilter) query = applyFilter(query);
+                  const { data, error } = await query.range(offset, offset + pageSize - 1);
+                  if (error) throw error;
+                  if (!data || data.length === 0) break;
+                  rows.push(...data);
+                  if (data.length < pageSize) break;
+                  offset += pageSize;
+                }
+                return rows;
+              };
 
               // Dedup LOW_WATER_LEVEL/DRY_RUN_RISK alerts by (well_id, underlying reading date) so
               // re-running the sync over the same historical window never raises a second alert for a
@@ -3706,7 +3772,11 @@ function MasterTablesSection() {
                 }
 
                 // 2.5. Detect Pump Runs from Raw Depth Readings & Insert into pump_run_summary (C)
-                // NOTE: This ADDS new rows only. It does not touch or delete any existing pump_run_summary rows.
+                // Replaces (delete + insert) each well/date's rows every run rather than only ever
+                // adding to them — necessary now that merging can change a run's start/stop timestamps,
+                // so a fragment detected by an earlier run wouldn't otherwise be superseded by its
+                // merged replacement and would linger alongside it, double-counting extraction. Only
+                // touches well/dates within the current time-range window; older history is untouched.
                 for (const [wellId, dateMap] of wellReadingsByDate.entries()) {
                   const wellDiameterForRuns = wellDiameterMap.get(wellId);
                   const wellAreaForRuns =
@@ -3716,7 +3786,7 @@ function MasterTablesSection() {
                     const sorted = [...readings].sort((a, b) => a.timestampMs - b.timestampMs);
                     if (sorted.length < 2) continue;
 
-                    const runs: { startIdx: number; endIdx: number }[] = [];
+                    const rawRanges: { startIdx: number; endIdx: number }[] = [];
                     let runStart: number | null = null;
                     for (let idx = 1; idx < sorted.length; idx++) {
                       const diff = sorted[idx].depth - sorted[idx - 1].depth;
@@ -3724,14 +3794,19 @@ function MasterTablesSection() {
                         if (runStart === null) runStart = idx - 1;
                       } else {
                         if (runStart !== null) {
-                          runs.push({ startIdx: runStart, endIdx: idx - 1 });
+                          rawRanges.push({ startIdx: runStart, endIdx: idx - 1 });
                           runStart = null;
                         }
                       }
                     }
                     if (runStart !== null) {
-                      runs.push({ startIdx: runStart, endIdx: sorted.length - 1 });
+                      rawRanges.push({ startIdx: runStart, endIdx: sorted.length - 1 });
                     }
+
+                    // Fold sensor-jitter fragments back together (see PUMP_RUN_MERGE_GAP_MIN) before
+                    // evaluating drop/duration thresholds — a run briefly interrupted by one
+                    // non-rising sample shouldn't be counted as two separate runs.
+                    const runs = mergeAdjacentRuns(sorted, rawRanges);
 
                     // Filter out sensor-noise blips: a real pump cycle causes a cumulative rise of at
                     // least PUMP_MIN_RUN_DROP_M and lasts at least PUMP_MIN_RUN_DURATION_MS. Without this,
@@ -3743,8 +3818,6 @@ function MasterTablesSection() {
                       const durationMs = endPoint.timestampMs - startPoint.timestampMs;
                       return drop >= PUMP_MIN_RUN_DROP_M && durationMs >= PUMP_MIN_RUN_DURATION_MS;
                     });
-
-                    if (validRuns.length === 0) continue;
 
                     const rowsForDate = validRuns.map((run, idx) => {
                       const startPoint = sorted[run.startIdx];
@@ -3768,14 +3841,24 @@ function MasterTablesSection() {
                       };
                     });
 
+                    await supabase.from('pump_run_summary').delete().eq('well_id', wellId).eq('run_date', dateStr);
                     if (rowsForDate.length > 0) {
                       await supabase.from('pump_run_summary').upsert(rowsForDate, { onConflict: 'well_id,pump_start_time,pump_stop_time' });
                     }
                   }
                 }
 
-                // Pull real pump run data — this is the single source of truth for run counts/runtime/extraction
-                const { data: pumpRunRows } = await supabase.from('pump_run_summary').select('well_id, run_date, pump_runtime_minutes, pump_extraction_per_run_liters, water_level_drop_during_run_meters');
+                // Pull real pump run data — this is the single source of truth for run counts/runtime/extraction.
+                // Scoped to the same readings window this run is processing, and paginated (see
+                // fetchAllRows) since pump_run_summary has long since grown past PostgREST's 1000-row
+                // default select cap.
+                const pumpRunCutoffDateStr = new Date(cutoffTimeMs).toISOString().split('T')[0];
+                const pumpRunRows = await fetchAllRows(
+                  'pump_run_summary',
+                  'well_id, run_date, pump_runtime_minutes, pump_extraction_per_run_liters, water_level_drop_during_run_meters',
+                  'pump_run_id',
+                  (q) => q.gte('run_date', pumpRunCutoffDateStr),
+                );
                 const pumpRunsByWellDate = new Map<string, { count: number; runtime: number; extraction: number; drop: number }>();
                 for (const row of pumpRunRows || []) {
                   const key = `${row.well_id}_${row.run_date}`;
@@ -3789,6 +3872,9 @@ function MasterTablesSection() {
 
                 // 3. Compute Derived Per-Well Summaries (D, E, F, J)
                 const districtDailyAgg = new Map<string, { wells: Set<string>; depthSum: number; depthCount: number; extraction: number; runtime: number }>();
+                // 7/30-day depth-change contributions per district+date, averaged across that district's wells —
+                // feeds weekly_monthly_district_summary alongside the rolling 30-day extraction computed below.
+                const districtWeeklyAgg = new Map<string, { sevenDaySum: number; sevenDayCount: number; thirtyDaySum: number; thirtyDayCount: number }>();
 
                 for (const [wellId, dateMap] of wellReadingsByDate.entries()) {
                   const sortedDates = Array.from(dateMap.keys()).sort();
@@ -3842,8 +3928,19 @@ function MasterTablesSection() {
                       const depth7Ago = dailyMedianByDate.get(date7Ago);
                       if (depth7Ago != null) {
                         const change7Days = medianDepth - depth7Ago;
+                        const change30Days = change7Days * 4.0;
                         weeklyPayload.seven_day_depth_change_meters = change7Days;
-                        weeklyPayload.thirty_day_depth_change_meters = change7Days * 4.0;
+                        weeklyPayload.thirty_day_depth_change_meters = change30Days;
+
+                        if (district) {
+                          const wAggKey = `${district}__${dateStr}`;
+                          const wAgg = districtWeeklyAgg.get(wAggKey) || { sevenDaySum: 0, sevenDayCount: 0, thirtyDaySum: 0, thirtyDayCount: 0 };
+                          wAgg.sevenDaySum += change7Days;
+                          wAgg.sevenDayCount += 1;
+                          wAgg.thirtyDaySum += change30Days;
+                          wAgg.thirtyDayCount += 1;
+                          districtWeeklyAgg.set(wAggKey, wAgg);
+                        }
                       }
                     }
                     await supabase.from('weekly_monthly_well_summary').upsert(weeklyPayload, { onConflict: 'well_id, calculation_date' });
@@ -3951,6 +4048,40 @@ function MasterTablesSection() {
                     avg_daily_pump_runtime_per_district_minutes: agg.wells.size > 0 ? agg.runtime / agg.wells.size : null,
                     updated_at: new Date().toISOString(),
                   }, { onConflict: 'district, date' });
+                }
+
+                // 5. Weekly/Monthly District Summary (H) — 7/30-day depth change averaged across the
+                // district's wells (from districtWeeklyAgg above); 30-day extraction as a rolling sum
+                // of this district's own daily totals, same rolling-window pattern as the well-level
+                // 7-day extraction above.
+                const districtDailySeries = new Map<string, { date: string; extraction: number }[]>();
+                for (const [aggKey, agg] of districtDailyAgg.entries()) {
+                  const [districtName, dateStr] = aggKey.split('__');
+                  const series = districtDailySeries.get(districtName) || [];
+                  series.push({ date: dateStr, extraction: agg.extraction });
+                  districtDailySeries.set(districtName, series);
+                }
+                for (const [districtName, series] of districtDailySeries.entries()) {
+                  series.sort((a, b) => a.date.localeCompare(b.date));
+                  for (let i = 0; i < series.length; i++) {
+                    const dateStr = series[i].date;
+                    const last30 = series.slice(Math.max(0, i - 29), i + 1);
+                    const thirtyDayExtraction = last30.reduce((sum, d) => sum + d.extraction, 0);
+                    const wAgg = districtWeeklyAgg.get(`${districtName}__${dateStr}`);
+                    const districtWeeklyPayload: Record<string, unknown> = {
+                      district: districtName,
+                      calculation_date: dateStr,
+                      thirty_day_water_extraction_per_district_liters: thirtyDayExtraction,
+                      updated_at: new Date().toISOString(),
+                    };
+                    if (wAgg && wAgg.sevenDayCount > 0) {
+                      districtWeeklyPayload.avg_seven_day_depth_change_per_district_meters = wAgg.sevenDaySum / wAgg.sevenDayCount;
+                      districtWeeklyPayload.avg_thirty_day_depth_change_per_district_meters = wAgg.thirtyDaySum / wAgg.thirtyDayCount;
+                    }
+                    await supabase
+                      .from('weekly_monthly_district_summary')
+                      .upsert(districtWeeklyPayload, { onConflict: 'district, calculation_date' });
+                  }
                 }
               }
 
