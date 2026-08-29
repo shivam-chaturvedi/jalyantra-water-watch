@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Tooltip, useMap } from 'react-leaflet';
+import { useEffect, useRef, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Tooltip, useMap, GeoJSON } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -83,8 +83,9 @@ export function GroundwaterMap({
   onDistrictClick,
   zoomTarget,
 }: GroundwaterMapProps) {
-  const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
   const [clustered, setClustered] = useState<SensorReading[]>([]);
+  const [stateBoundaries, setStateBoundaries] = useState<any>(null);
 
   const raiseMarker = (marker: L.Marker | null) => {
     if (!marker) return;
@@ -100,8 +101,8 @@ export function GroundwaterMap({
   const handleMarkerMouseOver = (sensor: SensorReading) => (event: L.LeafletMouseEvent) => {
     const marker = event.target as L.Marker | null;
     raiseMarker(marker);
-    mapInstance?.panTo([sensor.lat, sensor.long], { animate: true });
-    mapInstance?.panBy([0, -80], { animate: true });
+    mapRef.current?.panTo([sensor.lat, sensor.long], { animate: true });
+    mapRef.current?.panBy([0, -80], { animate: true });
     marker?.openTooltip();
   };
 
@@ -128,11 +129,19 @@ export function GroundwaterMap({
   }, [sensors]);
 
   useEffect(() => {
-    if (!zoomTarget || !mapInstance) return;
-    mapInstance.setView([zoomTarget.lat, zoomTarget.long], Math.max(mapInstance.getZoom(), 12), {
+    if (!zoomTarget || !mapRef.current) return;
+    mapRef.current.setView([zoomTarget.lat, zoomTarget.long], Math.max(mapRef.current.getZoom(), 12), {
       animate: true,
     });
-  }, [zoomTarget, mapInstance]);
+  }, [zoomTarget]);
+
+  // State boundaries GeoJSON loading disabled - CartoDB map already shows state names/boundaries visually
+  // useEffect(() => {
+  //   fetch('https://raw.githubusercontent.com/datameet/indian_maps/master/states/india_states.geojson')
+  //     .then(res => res.json())
+  //     .then(data => setStateBoundaries(data))
+  //     .catch(err => console.error('Failed to load state boundaries:', err));
+  // }, []);
 
   return (
     <motion.div
@@ -141,11 +150,11 @@ export function GroundwaterMap({
       className="map-container h-[500px] lg:h-[600px] relative"
     >
         <MapContainer
+          ref={mapRef}
           center={INDIA_CENTER}
           zoom={DEFAULT_ZOOM}
           className="h-full w-full"
           zoomControl={true}
-          whenCreated={setMapInstance}
           maxBounds={INDIA_BOUNDS}
           maxBoundsViscosity={1}
           minZoom={4.5}
@@ -153,9 +162,21 @@ export function GroundwaterMap({
           style={{ borderRadius: '0.25rem' }}
         >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          attribution='&copy; <a href="https://cartodb.com/attributions">CartoDB</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url={`https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${import.meta.env.VITE_CARTODB_BASEMAPS_API_KEY}`}
         />
+
+        {stateBoundaries && (
+          <GeoJSON
+            data={stateBoundaries}
+            style={() => ({
+              color: '#8b5cf6',
+              weight: 2,
+              opacity: 0.7,
+              fillOpacity: 0,
+            })}
+          />
+        )}
 
         <MapController sensors={sensors} />
 
