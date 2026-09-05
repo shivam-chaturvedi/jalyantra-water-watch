@@ -162,8 +162,8 @@ export function GroundwaterMap({
           style={{ borderRadius: '0.25rem' }}
         >
         <TileLayer
-          attribution='&copy; <a href="https://cartodb.com/attributions">CartoDB</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url={`https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${import.meta.env.VITE_CARTODB_BASEMAPS_API_KEY}`}
+          attribution='&copy; <a href="https://cartodb.com/attributions">CartoDB</a>'
+          url={`https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${import.meta.env.VITE_CARTODB_BASEMAPS_API_KEY}`}
         />
 
         {stateBoundaries && (

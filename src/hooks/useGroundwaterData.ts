@@ -43,6 +43,7 @@ type WellMasterRow = {
 
 type LocationMasterRow = {
   location_id: string;
+  village_city: string | null;
   district: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -105,7 +106,7 @@ async function fetchSupabaseDashboardSensors(): Promise<SensorReading[]> {
       .limit(SUPABASE_DASHBOARD_RAW_LIMIT),
     supabase.from('device_master').select('device_id,well_id'),
     supabase.from('well_master').select('well_id,location_id,well_name'),
-    supabase.from('location_master').select('location_id,district,latitude,longitude'),
+    supabase.from('location_master').select('location_id,village_city,district,latitude,longitude'),
   ]);
 
   if (rawResult.error) throw rawResult.error;
@@ -166,6 +167,7 @@ async function fetchSupabaseDashboardSensors(): Promise<SensorReading[]> {
         lastCollectedDateTime: latest.timestamp,
         lat,
         long,
+        village: location?.village_city || 'Unknown',
         district: location?.district || 'Unknown',
         status: Date.now() - latestTimestamp < 1000 * 60 * 60 * 24 * 30 ? 'active' : 'offline',
         lastSync: latest.timestamp,

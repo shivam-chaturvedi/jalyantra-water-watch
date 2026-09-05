@@ -329,6 +329,42 @@ export type FirebaseDeviceRegistryEntry = {
 
 export type FirebaseDevicesTree = Record<string, FirebaseDeviceRegistryEntry> | null;
 
+export interface SensorHistoryPoint {
+  id: string;
+  depth: number;
+  collectedDate: string;
+  /** From Firebase `collectedDateTime` when present — used for chart tooltips. */
+  collectedDateTime?: string;
+  timestamp: number;
+  /** Same power-on session across ~1 min samples within one pump run. */
+  deviceOnlineSince?: string;
+  triggerSource?: string;
+  uptimeSeconds?: number;
+  /** Full flattened RTDB row for dynamic CSV (all columns the device sent). */
+  rtdbExport?: RtdbCsvRow;
+}
+
+export interface SensorReading {
+  id: string;
+  deviceId: string;
+  depth: number;
+  collectedDate: string;
+  /** Latest sample's `collectedDateTime` from Firebase when provided. */
+  lastCollectedDateTime?: string;
+  lat: number;
+  long: number;
+  village: string;
+  district: string;
+  status: 'active' | 'offline';
+  lastSync: string;
+  /** Latest reading's flattened RTDB fields for dashboard CSV. */
+  latestRtdbExport?: RtdbCsvRow;
+  history: SensorHistoryPoint[];
+  validationFlags?: string[];
+  /** From device master data — false for electrical-only (non-pump) installations. */
+  isPumpConnected?: boolean;
+}
+
 function readingCoords(
   en: FirebaseReadingEntry,
   raw: Record<string, unknown>,
@@ -415,6 +451,7 @@ export function mergeReadingsWithDeviceRegistry(
       collectedDate: new Date(syncMs).toISOString().split('T')[0],
       lat,
       long,
+      village: 'Unknown',
       district: matchDistrictName(lat, long),
       status: 'offline',
       lastSync: new Date(syncMs).toISOString(),
@@ -428,42 +465,7 @@ export function mergeReadingsWithDeviceRegistry(
   );
 }
 
-export interface SensorHistoryPoint {
-  id: string;
-  depth: number;
-  collectedDate: string;
-  /** From Firebase `collectedDateTime` when present — used for chart tooltips. */
-  collectedDateTime?: string;
-  timestamp: number;
-  /** Same power-on session across ~1 min samples within one pump run. */
-  deviceOnlineSince?: string;
-  triggerSource?: string;
-  uptimeSeconds?: number;
-  /** Full flattened RTDB row for dynamic CSV (all columns the device sent). */
-  rtdbExport?: RtdbCsvRow;
-}
-
-export interface SensorReading {
-  id: string;
-  deviceId: string;
-  depth: number;
-  collectedDate: string;
-  /** Latest sample’s `collectedDateTime` from Firebase when provided. */
-  lastCollectedDateTime?: string;
-  lat: number;
-  long: number;
-  district: string;
-  status: 'active' | 'offline';
-  lastSync: string;
-  /** Latest reading’s flattened RTDB fields for dashboard CSV. */
-  latestRtdbExport?: RtdbCsvRow;
-  history: SensorHistoryPoint[];
-  validationFlags?: string[];
-  /** From device master data — false for electrical-only (non-pump) installations. */
-  isPumpConnected?: boolean;
-}
-
-export function isPumpConnectedDevice(sensor: Pick<SensorReading, 'isPumpConnected'>): boolean {
+export function isPumpConnectedDevice(sensor: Pick<SensorReading, "isPumpConnected">): boolean {
   return sensor.isPumpConnected !== false;
 }
 

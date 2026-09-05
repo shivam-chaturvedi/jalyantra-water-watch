@@ -118,7 +118,7 @@ const Index = () => {
   const wellRows = useMemo(() => {
     return filteredSensors.map((sensor) => ({
       well: sensor.deviceId,
-      village: sensor.district,
+      village: sensor.village,
       district: sensor.district,
       health: sensor.depth > 20 ? 'Critical' : sensor.depth > 10 ? 'Stressed' : 'Healthy',
       trend: `${sensor.depth.toFixed(1)}m`,
