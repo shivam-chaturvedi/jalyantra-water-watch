@@ -201,7 +201,7 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [kpiStats, setKpiStats] = useState<KPIStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLive, setIsLive] = useState(false);
+  const [isLive, setIsLive] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [availableLocations, setAvailableLocations] = useState<string[]>([]);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
@@ -250,11 +250,9 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
           setAvailableDates,
         );
         setIsLoading(false);
-        setIsLive(true);
       })
       .catch((error) => {
         console.error('Failed to bootstrap dashboard from Supabase', error);
-        setIsLive(true);
       });
     return () => {
       cancelled = true;
