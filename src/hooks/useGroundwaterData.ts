@@ -178,6 +178,51 @@ async function fetchSupabaseDashboardSensors(): Promise<SensorReading[]> {
     .sort((a, b) => a.deviceId.localeCompare(b.deviceId, undefined, { numeric: true }));
 }
 
+async function fetchVillageMapping(): Promise<Map<string, string>> {
+  const villageByDeviceId = new Map<string, string>();
+
+  try {
+    const [deviceResult, wellResult, locationResult] = await Promise.all([
+      supabase.from('device_master').select('device_id,well_id'),
+      supabase.from('well_master').select('well_id,location_id'),
+      supabase.from('location_master').select('location_id,village_city'),
+    ]);
+
+    if (deviceResult.error || wellResult.error || locationResult.error) {
+      console.warn('Failed to fetch village mapping, using fallback');
+      return villageByDeviceId;
+    }
+
+    const deviceById = new Map(
+      ((deviceResult.data ?? []) as DeviceMasterRow[]).map((row) => [row.device_id, row]),
+    );
+    const wellById = new Map(
+      ((wellResult.data ?? []) as WellMasterRow[]).map((row) => [row.well_id, row]),
+    );
+    const locationById = new Map(
+      ((locationResult.data ?? []) as { location_id: string; village_city: string | null }[])
+        .map((row) => [row.location_id, row.village_city]),
+    );
+
+    for (const [deviceId, deviceRow] of deviceById.entries()) {
+      const wellId = deviceRow.well_id;
+      if (!wellId) continue;
+
+      const well = wellById.get(wellId);
+      if (!well?.location_id) continue;
+
+      const village = locationById.get(well.location_id);
+      if (village) {
+        villageByDeviceId.set(deviceId, village);
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching village mapping:', error);
+  }
+
+  return villageByDeviceId;
+}
+
 interface UseGroundwaterDataReturn {
   sensors: SensorReading[];
   districts: District[];
@@ -215,13 +260,21 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
   );
 
   const processSnapshot = useCallback(
-    (readings: FirebaseReadings, devices: FirebaseDevicesTree) => {
+    async (readings: FirebaseReadings, devices: FirebaseDevicesTree) => {
       const sensorData = mergeReadingsWithDeviceRegistry(
         transformFirebaseReadings(readings),
         devices,
       );
+
+      // Fetch village data from Supabase and merge with Firebase sensors
+      const villageByDeviceId = await fetchVillageMapping();
+      const sensorsWithVillage = sensorData.map((sensor) => ({
+        ...sensor,
+        village: villageByDeviceId.get(sensor.deviceId) || sensor.village || 'Unknown',
+      }));
+
       calculateAndPublish(
-        sensorData,
+        sensorsWithVillage,
         setRawSensors,
         setDistricts,
         setAlerts,
