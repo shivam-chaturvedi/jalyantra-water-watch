@@ -202,6 +202,7 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
   const [kpiStats, setKpiStats] = useState<KPIStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLive, setIsLive] = useState(true);
+  const [supabaseLoaded, setSupabaseLoaded] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [availableLocations, setAvailableLocations] = useState<string[]>([]);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
@@ -234,30 +235,32 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
     [],
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    fetchSupabaseDashboardSensors()
-      .then((sensorData) => {
-        if (cancelled || sensorData.length === 0) return;
-        calculateAndPublish(
-          sensorData,
-          setRawSensors,
-          setDistricts,
-          setAlerts,
-          setKpiStats,
-          setLastUpdated,
-          setAvailableLocations,
-          setAvailableDates,
-        );
-        setIsLoading(false);
-      })
-      .catch((error) => {
-        console.error('Failed to bootstrap dashboard from Supabase', error);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Disabled Supabase bootstrap - using only Firebase for consistent real-time data
+  // This ensures same data on initial load and hard refresh
+  // useEffect(() => {
+  //   let cancelled = false;
+  //   fetchSupabaseDashboardSensors()
+  //     .then((sensorData) => {
+  //       if (cancelled || sensorData.length === 0) return;
+  //       calculateAndPublish(
+  //         sensorData,
+  //         setRawSensors,
+  //         setDistricts,
+  //         setAlerts,
+  //         setKpiStats,
+  //         setLastUpdated,
+  //         setAvailableLocations,
+  //         setAvailableDates,
+  //       );
+  //       setIsLoading(false);
+  //     })
+  //     .catch((error) => {
+  //       console.error('Failed to bootstrap dashboard from Supabase', error);
+  //     });
+  //   return () => {
+  //     cancelled = true;
+  //   };
+  // }, []);
 
   useEffect(() => {
     fetchAllDeviceMasterData()
@@ -304,6 +307,7 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
       if (!hasReadingsSnapshot || !hasDevicesSnapshot) return;
       if (!latestReadings || Object.keys(latestReadings).length === 0) return;
       processSnapshot(latestReadings, latestDevices);
+      setIsLoading(false);
     };
 
     const unsubscribeReadings = onValue(
