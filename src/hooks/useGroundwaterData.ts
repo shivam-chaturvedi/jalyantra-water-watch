@@ -306,8 +306,14 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
       const kpiData = calculateKPIStats(sensorsWithVillage, districtData);
       const alertData = generateAlerts(districtData);
 
+      // Cache WITHOUT history to reduce size (50-100KB vs 5-10MB)
+      const sensorsWithoutHistory = sensorsWithVillage.map((sensor) => ({
+        ...sensor,
+        history: [],
+      }));
+
       saveDashboardCache({
-        sensors: sensorsWithVillage,
+        sensors: sensorsWithoutHistory,
         districts: districtData,
         alerts: alertData,
         kpiStats: kpiData,

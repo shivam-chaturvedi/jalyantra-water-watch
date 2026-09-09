@@ -1,7 +1,11 @@
 import { SensorReading, District, Alert, KPIStats } from './data';
 
+interface CachedSensorData extends Omit<SensorReading, 'history'> {
+  history: SensorReading['history'];
+}
+
 interface CachedDashboardData {
-  sensors: SensorReading[];
+  sensors: CachedSensorData[];
   districts: District[];
   alerts: Alert[];
   kpiStats: KPIStats;
