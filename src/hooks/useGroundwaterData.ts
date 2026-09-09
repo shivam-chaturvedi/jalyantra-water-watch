@@ -17,6 +17,7 @@ import {
 import { database } from '@/lib/firebaseClient';
 import { fetchAllDeviceMasterData, type DeviceMasterData } from '@/lib/siteAdmin';
 import { supabase } from '@/lib/supabaseClient';
+import { saveDashboardCache, loadDashboardCache, isCacheValid } from '@/lib/dashboardCache';
 
 const SUPABASE_DASHBOARD_RAW_LIMIT = 5000;
 
@@ -251,8 +252,24 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [availableLocations, setAvailableLocations] = useState<string[]>([]);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [isCached, setIsCached] = useState(false);
   const readingsPath = (import.meta.env.VITE_FIREBASE_READINGS_PATH as string | undefined) ?? 'readings';
   const devicesPath = (import.meta.env.VITE_FIREBASE_DEVICES_PATH as string | undefined) ?? 'devices';
+
+  // ✅ Load cached data immediately on component mount for instant display
+  useEffect(() => {
+    const cache = loadDashboardCache();
+    if (isCacheValid(cache)) {
+      // Display cached data instantly
+      setRawSensors(cache.sensors);
+      setDistricts(cache.districts);
+      setAlerts(cache.alerts);
+      setKpiStats(cache.kpiStats);
+      setLastUpdated(new Date(cache.timestamp));
+      setIsLoading(false);
+      setIsCached(true);
+    }
+  }, []);
 
   const sensors = useMemo(
     () => applyDeviceMasterFlags(rawSensors, deviceMasterById),
@@ -283,7 +300,23 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
         setAvailableLocations,
         setAvailableDates,
       );
+
+      // ✅ Save fresh data to cache for instant loading on next refresh
+      const districtData = calculateDistrictStats(sensorsWithVillage);
+      const kpiData = calculateKPIStats(sensorsWithVillage, districtData);
+      const alertData = generateAlerts(districtData);
+
+      saveDashboardCache({
+        sensors: sensorsWithVillage,
+        districts: districtData,
+        alerts: alertData,
+        kpiStats: kpiData,
+        timestamp: Date.now(),
+        version: 1,
+      });
+
       setIsLoading(false);
+      setIsCached(false);
     },
     [],
   );
