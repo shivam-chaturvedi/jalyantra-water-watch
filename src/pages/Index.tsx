@@ -7,9 +7,13 @@ import { DistrictPanel } from '@/components/DistrictPanel';
 import { SensorDetailModal } from '@/components/SensorDetailModal';
 import { Footer } from '@/components/Footer';
 import { useGroundwaterData } from '@/hooks/useGroundwaterData';
+import { useSurveyWells } from '@/hooks/useSurveyWells';
 import { SensorReading, District, Alert, sensorsDashboardExportRows, isPumpConnectedDevice } from '@/lib/data';
+import { SurveyWellPoint } from '@/lib/surveyData';
 import { downloadDataAsCsv } from '@/lib/csv';
 import { SensorHistoryModal } from '@/components/SensorHistoryModal';
+import { SurveyWellDetailModal } from '@/components/SurveyWellDetailModal';
+import { SurveyHistoryModal } from '@/components/SurveyHistoryModal';
 import { motion } from 'framer-motion';
 import {
   LineChart,
@@ -37,6 +41,7 @@ const Index = () => {
     setIsLive,
     refreshData,
   } = useGroundwaterData();
+  const { surveyWells } = useSurveyWells();
 
   const [selectedDistrict, setSelectedDistrict] = useState<District | null>(null);
   const [selectedSensor, setSelectedSensor] = useState<SensorReading | null>(null);
@@ -44,6 +49,10 @@ const Index = () => {
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
   const [historySensor, setHistorySensor] = useState<SensorReading | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [selectedSurveyWell, setSelectedSurveyWell] = useState<SurveyWellPoint | null>(null);
+  const [isSurveyWellModalOpen, setIsSurveyWellModalOpen] = useState(false);
+  const [surveyHistoryWell, setSurveyHistoryWell] = useState<SurveyWellPoint | null>(null);
+  const [isSurveyHistoryOpen, setIsSurveyHistoryOpen] = useState(false);
   const [selectedDistrictName, setSelectedDistrictName] = useState<string>(LOCATION_ALL_KEY);
   const [selectedWell, setSelectedWell] = useState<string>(WELL_ALL_KEY);
   const mapSectionRef = useRef<HTMLDivElement>(null);
@@ -69,6 +78,16 @@ const Index = () => {
   const handleViewHistory = useCallback((sensor: SensorReading) => {
     setHistorySensor(sensor);
     setIsHistoryOpen(true);
+  }, []);
+
+  const handleSurveyWellClick = (well: SurveyWellPoint) => {
+    setSelectedSurveyWell(well);
+    setIsSurveyWellModalOpen(true);
+  };
+
+  const handleViewSurveyHistory = useCallback((well: SurveyWellPoint) => {
+    setSurveyHistoryWell(well);
+    setIsSurveyHistoryOpen(true);
   }, []);
 
   const handleDistrictClick = (district: District) => {
@@ -249,8 +268,10 @@ const Index = () => {
           <GroundwaterMap
             sensors={filteredSensors}
             districts={filteredDistricts}
+            surveyWells={surveyWells}
             onSensorClick={handleSensorClick}
             onDistrictClick={handleDistrictClick}
+            onSurveyWellClick={handleSurveyWellClick}
             zoomTarget={selectedDistrict ? { lat: selectedDistrict.lat, long: selectedDistrict.long } : null}
           />
         </div>
@@ -442,6 +463,18 @@ const Index = () => {
         sensor={historySensor}
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
+      />
+
+      <SurveyWellDetailModal
+        well={selectedSurveyWell}
+        isOpen={isSurveyWellModalOpen}
+        onClose={() => setIsSurveyWellModalOpen(false)}
+        onViewHistory={handleViewSurveyHistory}
+      />
+      <SurveyHistoryModal
+        well={surveyHistoryWell}
+        isOpen={isSurveyHistoryOpen}
+        onClose={() => setIsSurveyHistoryOpen(false)}
       />
     </div>
     </>

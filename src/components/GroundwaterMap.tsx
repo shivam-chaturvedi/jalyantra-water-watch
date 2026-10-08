@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Tooltip, useMap, GeoJSON } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -9,14 +9,17 @@ import {
   getDepthRiskLevel,
   getRiskColorClass,
 } from '@/lib/data';
+import { SurveyWellPoint } from '@/lib/surveyData';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
 interface GroundwaterMapProps {
   sensors: SensorReading[];
   districts: District[];
+  surveyWells?: SurveyWellPoint[];
   onSensorClick?: (sensor: SensorReading) => void;
   onDistrictClick?: (district: District) => void;
+  onSurveyWellClick?: (well: SurveyWellPoint) => void;
   zoomTarget?: { lat: number; long: number } | null;
 }
 
@@ -30,21 +33,21 @@ const INDIA_BOUNDS: L.LatLngBoundsExpression = [
 
 // Custom hook to handle map events
 function MapController({
-  sensors,
-}: { sensors: SensorReading[] }) {
+  points,
+}: { points: { lat: number; long: number }[] }) {
   const map = useMap();
 
   useEffect(() => {
     map.setMaxBounds(INDIA_BOUNDS);
 
-    // Fit bounds to show all sensors, but stay inside India.
-    if (sensors.length > 0) {
-      const bounds = L.latLngBounds(sensors.map(s => [s.lat, s.long]));
+    // Fit bounds to show all points (sensors + surveyed wells), but stay inside India.
+    if (points.length > 0) {
+      const bounds = L.latLngBounds(points.map(p => [p.lat, p.long]));
       map.fitBounds(bounds.pad(0.2), { padding: [50, 50], maxZoom: 9 });
     } else {
       map.setView(INDIA_CENTER, DEFAULT_ZOOM);
     }
-  }, [map, sensors]);
+  }, [map, points]);
 
   return null;
 }
@@ -56,6 +59,10 @@ const riskColors = {
   warning: '#e86830',
   critical: '#c43d3d',
 };
+
+// Periodic survey visits (no permanent device) get one neutral color, distinct from
+// the risk-based palette above, since depth risk isn't continuously tracked for them.
+const SURVEY_WELL_COLOR = '#7c3aed';
 
 // Simple location marker used on the map for each sensor.
 function createLocationIcon(color: string, size: number = 14) {
@@ -76,15 +83,39 @@ function createLocationIcon(color: string, size: number = 14) {
   });
 }
 
+// Diamond marker for surveyed wells — visually distinct shape (not just color) from
+// the circular live-sensor markers, since these represent periodic visits, not a
+// continuously-monitored device.
+function createSurveyWellIcon(color: string, size: number = 14) {
+  return L.divIcon({
+    className: 'custom-survey-well-marker',
+    html: `
+      <div style="
+        width: ${size}px;
+        height: ${size}px;
+        background-color: ${color};
+        border: 2px solid white;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        transform: rotate(45deg);
+      "></div>
+    `,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
+
 export function GroundwaterMap({
   sensors,
   districts,
+  surveyWells = [],
   onSensorClick,
   onDistrictClick,
+  onSurveyWellClick,
   zoomTarget,
 }: GroundwaterMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const [clustered, setClustered] = useState<SensorReading[]>([]);
+  const [clusteredSurveyWells, setClusteredSurveyWells] = useState<SurveyWellPoint[]>([]);
   const [stateBoundaries, setStateBoundaries] = useState<any>(null);
 
   const raiseMarker = (marker: L.Marker | null) => {
@@ -116,6 +147,10 @@ export function GroundwaterMap({
     onSensorClick?.(sensor);
   };
 
+  const handleSurveyWellClick = (well: SurveyWellPoint) => {
+    onSurveyWellClick?.(well);
+  };
+
   useEffect(() => {
     const groups = new Map<string, SensorReading[]>();
     sensors.forEach((sensor) => {
@@ -127,6 +162,23 @@ export function GroundwaterMap({
     const merged = Array.from(groups.values()).flatMap((group) => group);
     setClustered(merged);
   }, [sensors]);
+
+  useEffect(() => {
+    const groups = new Map<string, SurveyWellPoint[]>();
+    surveyWells.forEach((well) => {
+      const key = `${well.lat.toFixed(3)}-${well.long.toFixed(3)}`;
+      const group = groups.get(key) ?? [];
+      group.push(well);
+      groups.set(key, group);
+    });
+    const merged = Array.from(groups.values()).flatMap((group) => group);
+    setClusteredSurveyWells(merged);
+  }, [surveyWells]);
+
+  const allMapPoints = useMemo(
+    () => [...sensors, ...surveyWells],
+    [sensors, surveyWells],
+  );
 
   useEffect(() => {
     if (!zoomTarget || !mapRef.current) return;
@@ -178,7 +230,7 @@ export function GroundwaterMap({
           />
         )}
 
-        <MapController sensors={sensors} />
+        <MapController points={allMapPoints} />
 
         {/* Sensor Markers */}
         {clustered.map((sensor) => {
@@ -253,6 +305,67 @@ export function GroundwaterMap({
           );
         })}
 
+        {/* Surveyed Well Markers — periodic portable-device visits, no permanent sensor */}
+        {clusteredSurveyWells.map((well) => {
+          const icon = createSurveyWellIcon(SURVEY_WELL_COLOR, 14);
+
+          return (
+            <Marker
+              key={well.wellId}
+              position={[well.lat, well.long]}
+              icon={icon}
+              eventHandlers={{
+                click: (event: L.LeafletMouseEvent) => {
+                  event.target?.closeTooltip();
+                  handleSurveyWellClick(well);
+                },
+                mouseover: (event: L.LeafletMouseEvent) => {
+                  const marker = event.target as L.Marker | null;
+                  raiseMarker(marker);
+                  mapRef.current?.panTo([well.lat, well.long], { animate: true });
+                  mapRef.current?.panBy([0, -80], { animate: true });
+                  marker?.openTooltip();
+                },
+                mouseout: handleMarkerMouseOut,
+              }}
+            >
+              <Tooltip className="jal-tooltip" direction="top" offset={[0, -10]}>
+                <div className="min-w-[220px] p-1">
+                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
+                    <span className="font-semibold text-sm text-foreground">{well.wellName}</span>
+                    <span className="badge-squared text-white" style={{ backgroundColor: SURVEY_WELL_COLOR }}>
+                      SURVEYED
+                    </span>
+                  </div>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">District</span>
+                      <span className="font-medium text-foreground">{well.district}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Last depth</span>
+                      <span className="font-bold text-xl text-foreground">
+                        {well.lastDepthMeters != null ? `${well.lastDepthMeters.toFixed(2)}m` : '—'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-muted-foreground shrink-0">Last surveyed</span>
+                      <span className="font-medium text-right text-foreground text-xs leading-tight">
+                        {well.lastSurveyedOn ? new Date(well.lastSurveyedOn).toLocaleDateString() : '—'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <span className="text-xs text-accent font-semibold uppercase tracking-wide">
+                      Click for Full Details →
+                    </span>
+                  </div>
+                </div>
+              </Tooltip>
+            </Marker>
+          );
+        })}
+
       </MapContainer>
 
       {/* Map Legend */}
@@ -276,17 +389,29 @@ export function GroundwaterMap({
             <span className="w-3 h-3 bg-depth-critical rounded-full" />
             <span className="text-muted-foreground">&gt;20m <span className="font-medium text-foreground">Critical</span></span>
           </div>
+          <div className="flex items-center gap-3 text-xs pt-1 mt-1 border-t border-border/60">
+            <span className="w-3 h-3 shrink-0" style={{ backgroundColor: SURVEY_WELL_COLOR, transform: 'rotate(45deg)' }} />
+            <span className="text-muted-foreground"><span className="font-medium text-foreground">Surveyed well</span> (no live sensor)</span>
+          </div>
         </div>
       </div>
 
       {/* Sensor Count Badge - Squared */}
-      <div className="absolute top-4 right-4 bg-card/98 backdrop-blur-sm border border-border px-4 py-2 shadow-elevated z-10 pointer-events-none" style={{ borderRadius: '0.25rem' }}>
+      <div className="absolute top-4 right-4 bg-card/98 backdrop-blur-sm border border-border px-4 py-2 shadow-elevated z-10 pointer-events-none space-y-1" style={{ borderRadius: '0.25rem' }}>
         <div className="flex items-center gap-2 text-xs">
           <span className="w-2 h-2 bg-accent" style={{ borderRadius: '1px' }} />
           <span className="text-muted-foreground">
             <span className="font-bold text-foreground">{sensors.length}</span> sensors monitored
           </span>
         </div>
+        {surveyWells.length > 0 && (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="w-2 h-2" style={{ backgroundColor: SURVEY_WELL_COLOR, borderRadius: '1px' }} />
+            <span className="text-muted-foreground">
+              <span className="font-bold text-foreground">{surveyWells.length}</span> wells surveyed
+            </span>
+          </div>
+        )}
       </div>
     </motion.div>
   );
