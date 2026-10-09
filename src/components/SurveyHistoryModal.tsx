@@ -37,7 +37,7 @@ export function SurveyHistoryModal({ well, isOpen, onClose }: SurveyHistoryModal
       `${well.wellId}-survey-history.csv`,
       readings.map((r) => ({
         survey: r.surveyName,
-        reading_sequence: r.readingSequence,
+        surveyor: r.surveyorName,
         depth_meters: r.depthMeters,
         reading_timestamp: r.readingTimestamp,
         latitude: r.latitude,
@@ -106,7 +106,7 @@ export function SurveyHistoryModal({ well, isOpen, onClose }: SurveyHistoryModal
                         <tr className="border-b border-border text-muted-foreground">
                           <th className="py-2 pr-2 font-medium">Survey</th>
                           <th className="py-2 pr-2 font-medium">When</th>
-                          <th className="py-2 pr-2 font-medium tabular-nums">#</th>
+                          <th className="py-2 pr-2 font-medium">Surveyor</th>
                           <th className="py-2 pr-2 font-medium tabular-nums">Depth</th>
                           <th className="py-2 font-medium">Notes</th>
                         </tr>
@@ -121,7 +121,7 @@ export function SurveyHistoryModal({ well, isOpen, onClose }: SurveyHistoryModal
                                 timeStyle: 'short',
                               })}
                             </td>
-                            <td className="py-2 pr-2 tabular-nums align-top">{r.readingSequence ?? '—'}</td>
+                            <td className="py-2 pr-2 align-top">{r.surveyorName ?? '—'}</td>
                             <td className="py-2 pr-2 tabular-nums align-top">{r.depthMeters}m</td>
                             <td className="py-2 align-top text-muted-foreground">{r.surveyorNotes ?? '—'}</td>
                           </tr>

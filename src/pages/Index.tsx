@@ -8,12 +8,21 @@ import { SensorDetailModal } from '@/components/SensorDetailModal';
 import { Footer } from '@/components/Footer';
 import { useGroundwaterData } from '@/hooks/useGroundwaterData';
 import { useSurveyWells } from '@/hooks/useSurveyWells';
-import { SensorReading, District, Alert, sensorsDashboardExportRows, isPumpConnectedDevice } from '@/lib/data';
+import {
+  SensorReading,
+  District,
+  Alert,
+  sensorsDashboardExportRows,
+  isPumpConnectedDevice,
+  getDepthRiskLevel,
+  getRiskTextColorClass,
+} from '@/lib/data';
 import { SurveyWellPoint } from '@/lib/surveyData';
 import { downloadDataAsCsv } from '@/lib/csv';
 import { SensorHistoryModal } from '@/components/SensorHistoryModal';
 import { SurveyWellDetailModal } from '@/components/SurveyWellDetailModal';
 import { SurveyHistoryModal } from '@/components/SurveyHistoryModal';
+import { SurveySnapshotCards } from '@/components/SurveySnapshotCards';
 import { motion } from 'framer-motion';
 import {
   LineChart,
@@ -41,7 +50,7 @@ const Index = () => {
     setIsLive,
     refreshData,
   } = useGroundwaterData();
-  const { surveyWells } = useSurveyWells();
+  const { surveyWells, snapshot: surveySnapshot, allReadings: surveyReadings, isLoading: isSurveyLoading } = useSurveyWells();
 
   const [selectedDistrict, setSelectedDistrict] = useState<District | null>(null);
   const [selectedSensor, setSelectedSensor] = useState<SensorReading | null>(null);
@@ -98,6 +107,11 @@ const Index = () => {
   const locationLabel = selectedDistrictName === LOCATION_ALL_KEY ? 'All Districts' : selectedDistrictName;
 
   const handleAlertClick = (alert: Alert) => {
+    if (alert.surveyWellId) {
+      const well = surveyWells.find((w) => w.wellId === alert.surveyWellId);
+      if (well) handleSurveyWellClick(well);
+      return;
+    }
     // Find the district associated with the alert
     const district = districts.find(d => d.name === alert.district);
     if (district) {
@@ -121,10 +135,43 @@ const Index = () => {
     return districts.filter((district) => district.name === locationFilter);
   }, [districts, locationFilter]);
 
+  const filteredSurveyWells = useMemo(() => {
+    if (!locationFilter) return surveyWells;
+    return surveyWells.filter((well) => well.district === locationFilter);
+  }, [surveyWells, locationFilter]);
+
+  // Survey alerts: only one kind — Critical Water Level, depth to water > 20 m at a well's latest survey reading.
+  const surveyAlerts = useMemo<Alert[]>(() => {
+    return filteredSurveyWells
+      .filter((well) => well.lastDepthMeters != null && well.lastDepthMeters > 20)
+      .sort((a, b) => (b.lastDepthMeters ?? 0) - (a.lastDepthMeters ?? 0))
+      .map((well) => ({
+        id: `survey-critical-${well.wellId}`,
+        type: 'survey_critical_depth' as const,
+        district: well.district,
+        label: well.wellName,
+        surveyWellId: well.wellId,
+        message: `Water level at ${well.lastDepthMeters!.toFixed(1)} m - Critical`,
+        severity: 'critical' as const,
+        timestamp: well.lastSurveyedOn ?? new Date().toISOString(),
+      }));
+  }, [filteredSurveyWells]);
+
   const filteredAlerts = useMemo(() => {
-    if (!locationFilter) return alerts;
-    return alerts.filter((alert) => alert.district === locationFilter);
-  }, [alerts, locationFilter]);
+    const sensorAlerts = locationFilter ? alerts.filter((alert) => alert.district === locationFilter) : alerts;
+    return [...sensorAlerts, ...surveyAlerts];
+  }, [alerts, locationFilter, surveyAlerts]);
+
+  // Every stored survey reading (all surveys), newest first — not just each well's latest.
+  const surveyRows = useMemo(
+    () => (locationFilter ? surveyReadings.filter((r) => r.district === locationFilter) : surveyReadings),
+    [surveyReadings, locationFilter],
+  );
+
+  const openSurveyWell = (wellId: string) => {
+    const well = surveyWells.find((w) => w.wellId === wellId);
+    if (well) handleSurveyWellClick(well);
+  };
 
   const handleViewAllSensors = useCallback(() => {
     setSelectedDistrictName(LOCATION_ALL_KEY);
@@ -245,6 +292,9 @@ const Index = () => {
           {/* KPI Cards */}
           <KPICards stats={kpiStats} isLoading={isLoading} />
 
+          {/* Latest Survey Snapshot — most recently completed portable survey */}
+          <SurveySnapshotCards snapshot={surveySnapshot} isLoading={isSurveyLoading} />
+
           {/* Alerts Strip */}
           <AlertsStrip 
             alerts={filteredAlerts} 
@@ -268,7 +318,7 @@ const Index = () => {
           <GroundwaterMap
             sensors={filteredSensors}
             districts={filteredDistricts}
-            surveyWells={surveyWells}
+            surveyWells={filteredSurveyWells}
             onSensorClick={handleSensorClick}
             onDistrictClick={handleDistrictClick}
             onSurveyWellClick={handleSurveyWellClick}
@@ -437,6 +487,72 @@ const Index = () => {
             </tbody>
           </table>
         </div>
+      </div>
+      <div className="jal-card overflow-x-auto">
+        <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
+          <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Survey Readings</h2>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+            All surveys · {surveyRows.length} reading{surveyRows.length === 1 ? '' : 's'}
+          </span>
+        </div>
+        {surveyRows.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="professional-table">
+              <thead>
+                <tr>
+                  <th>Well Name/Id</th>
+                  <th className="text-center">Village</th>
+                  <th className="text-center">District</th>
+                  <th className="text-center">Depth to Water</th>
+                  <th className="text-center">Survey Date</th>
+                  <th className="text-center">Survey Name</th>
+                  <th className="text-center">Surveyor</th>
+                  <th className="text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {surveyRows.map((row) => {
+                  const risk = row.depthMeters != null ? getDepthRiskLevel(row.depthMeters) : null;
+                  return (
+                    <tr key={row.id} onClick={() => openSurveyWell(row.wellId)} className="cursor-pointer">
+                      <td className="font-medium text-foreground">
+                        {row.wellName}
+                        {row.wellName !== row.wellId && (
+                          <span className="block text-[11px] font-mono text-muted-foreground">{row.wellId}</span>
+                        )}
+                      </td>
+                      <td className="text-center text-muted-foreground">{row.village}</td>
+                      <td className="text-center text-muted-foreground">{row.district}</td>
+                      <td className="text-center">
+                        <span className={`font-bold font-mono ${risk ? getRiskTextColorClass(risk) : 'text-muted-foreground'}`}>
+                          {row.depthMeters != null ? `${row.depthMeters.toFixed(2)}m` : '—'}
+                        </span>
+                      </td>
+                      <td className="text-center font-mono">
+                        {new Date(row.readingTimestamp).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                      </td>
+                      <td className="text-center text-muted-foreground">{row.surveyName}</td>
+                      <td className="text-center text-muted-foreground">{row.surveyorName ?? '—'}</td>
+                      <td className="text-center">
+                        <button
+                          className="text-teal-600 font-semibold uppercase text-xs"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openSurveyWell(row.wellId);
+                          }}
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="py-6 text-center text-sm text-muted-foreground">No survey readings for the current selection.</p>
+        )}
       </div>
     </motion.div>
   </main>

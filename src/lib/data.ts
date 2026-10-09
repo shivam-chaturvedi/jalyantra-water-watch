@@ -103,6 +103,23 @@ function tryParseInstant(s: string | undefined): number | null {
   return Number.isNaN(t) ? null : t;
 }
 
+/**
+ * Portable (survey) JalYantra units push into the same `readings/` node as fixed devices, but each
+ * reading belongs to whichever well the surveyor picked (`wellId`) rather than to one installation.
+ * They must never be treated as a fixed sensor — identified by the `Porta-` device id prefix, or by
+ * the survey-form fields (`wellId` / `testerName`) only the portable app sends.
+ */
+export function isPortableDeviceBatch(batchKey: string, batch: unknown): boolean {
+  if (/^porta/i.test(batchKey.trim())) return true;
+  if (!batch || typeof batch !== 'object') return false;
+  return Object.values(batch as Record<string, unknown>).some(
+    (entry) =>
+      !!entry &&
+      typeof entry === 'object' &&
+      ('wellId' in (entry as Record<string, unknown>) || 'testerName' in (entry as Record<string, unknown>)),
+  );
+}
+
 /** RTDB child key is sometimes a Unix time: `1773752363` (s) or ms (13 digits). Uses path’s last segment. */
 export function instantFromRtdbChildKey(childKey: string): number | null {
   const segment = childKey.includes('/') ? (childKey.split('/').pop() ?? childKey) : childKey;
@@ -483,8 +500,12 @@ export interface District {
 
 export interface Alert {
   id: string;
-  type: 'rapid_decline' | 'offline_sensor' | 'poor_recharge' | 'critical_threshold';
+  type: 'rapid_decline' | 'offline_sensor' | 'poor_recharge' | 'critical_threshold' | 'survey_critical_depth';
   district: string;
+  /** Shown before the message instead of the district (e.g. a well name for survey alerts). */
+  label?: string;
+  /** Survey alerts point at a surveyed well rather than a district. */
+  surveyWellId?: string;
   message: string;
   severity: 'warning' | 'critical' | 'info';
   timestamp: string;
@@ -726,6 +747,7 @@ export function transformFirebaseReadings(raw: FirebaseReadings): SensorReading[
 
   const unmerged = Object.entries(raw)
     .map(([batchKey, batch]) => {
+      if (isPortableDeviceBatch(batchKey, batch)) return null; // survey data — see src/lib/surveySync.ts
       const leaves = leavesForDeviceBatch(batchKey, batch);
       if (!leaves.length) return null;
 

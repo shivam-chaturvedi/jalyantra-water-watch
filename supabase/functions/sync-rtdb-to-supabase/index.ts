@@ -363,6 +363,9 @@ serve(async (req: Request) => {
 
       for (const [batchKey, batchNode] of Object.entries(readingsData)) {
         if (!batchNode || typeof batchNode !== "object") continue;
+        // Portable survey units (Porta-*) share the readings node but belong in survey_reading,
+        // not raw_sensor_data — see src/lib/surveySync.ts (synced from the Admin panel).
+        if (/^porta/i.test(batchKey)) continue;
 
         const deviceId = batchKey;
         const wellId = `WEL-${deviceId}`;

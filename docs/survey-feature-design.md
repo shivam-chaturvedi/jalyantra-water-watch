@@ -238,7 +238,7 @@ Devices working in no-signal areas caching readings locally and pushing them onc
 2. **Report fields** — you said "will do" (confirm with Krushivikas). Still open; proposed default in §2 stands until you confirm.
 3. **Report filters** — not yet answered; still open (single-survey-only vs. also district/date-range filtering for v1).
 4. ~~Access control~~ **Resolved: no login required.** Dashboard and downloads stay fully public, same as everything else today — simplifies §2.5's RLS to "keep the same permissive public policy," no new role/auth work needed.
-5. ~~Repeat readings within one survey~~ **Resolved: up to 3 per well** (QA against positioning/holding error) — schema updated in §2.3 to allow multiple rows per well per survey, with the median computed at report time as the "official" value.
+5. ~~Repeat readings within one survey~~ **Revised (Oct 2026): last reading wins.** Sensor noise is handled on-device (`averageSampleCount`); a positioning mistake is fixed by a retake that overwrites the earlier reading. `survey_reading` holds one row per (survey, well) — see `supabase/migrations/20261008000000_survey_portable_ingest.sql`. The actual portable payload (`readings/Porta-*/{pushId}`: `wellId`, `siteName`, `testerName`, `testerCompany`, `testerData`, `depth`, `collectedDateTime`) and the Supabase→Firebase `latestSurvey/` well list are implemented in `src/lib/surveySync.ts`.
 6. ~~Portable device identity~~ **Resolved: 2-3 devices per NGO, max 2 (usually 1) used per survey.** Schema updated in §2.4 — `device_master.partner_id` (NGO ownership) + `device_master.portable_device_code` (the friendly "PD-01"-style id).
 
 ---

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { AlertTriangle, TrendingDown, Wifi, CloudRain, X } from 'lucide-react';
+import { AlertTriangle, TrendingDown, Wifi, CloudRain, X, Gauge } from 'lucide-react';
 import { Alert } from '@/lib/data';
 import { cn } from '@/lib/utils';
 
@@ -14,6 +14,7 @@ const alertIcons = {
   offline_sensor: Wifi,
   poor_recharge: CloudRain,
   critical_threshold: AlertTriangle,
+  survey_critical_depth: Gauge,
 };
 
 const severityStyles = {
@@ -71,7 +72,7 @@ export function AlertsStrip({ alerts, onAlertClick, onDismiss }: AlertsStripProp
               )}
             >
               <Icon className={cn("w-4 h-4 flex-shrink-0", styles.icon)} />
-              <span className="font-semibold text-foreground">{alert.district}:</span>
+              <span className="font-semibold text-foreground">{alert.label ?? alert.district}:</span>
               <span className="text-muted-foreground">{alert.message}</span>
               {onDismiss && (
                 <button

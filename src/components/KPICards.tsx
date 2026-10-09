@@ -20,7 +20,7 @@ interface KPICardProps {
   delay?: number;
 }
 
-function KPICard({
+export function KPICard({
   title,
   value,
   subtitle,

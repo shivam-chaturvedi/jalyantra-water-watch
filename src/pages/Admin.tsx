@@ -50,7 +50,9 @@ import {
   toDriveStreamUrl
 } from '@/lib/driveLinks';
 import { useLiveDevices } from '@/hooks/useLiveDevices';
-import { matchDistrictName } from '@/lib/data';
+import { SurveyAdminSection } from '@/components/SurveyAdminSection';
+import { syncPortableReadings } from '@/lib/surveySync';
+import { isPortableDeviceBatch, matchDistrictName } from '@/lib/data';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -66,6 +68,7 @@ type AdminSection =
   | 'partners'
   | 'devices'
   | 'master-tables'
+  | 'surveys'
   | 'media';
 
 type Installation = { title: string; videoUrl: string; notes: string; mediaCsv?: string };
@@ -88,6 +91,7 @@ const SIDEBAR_ITEMS: Array<{
     { id: 'partners', icon: Users, label: 'Partners Page', desc: 'Krushi Vikas video & photo gallery' },
     { id: 'devices', icon: Signal, label: 'Live Devices', desc: 'Pump vs non-pump per live device' },
     { id: 'master-tables', icon: FileText, label: 'Master & Telemetry', desc: 'Live Edge calculations & Supabase tables' },
+    { id: 'surveys', icon: MapPin, label: 'Surveys', desc: 'Portable surveys, device well list & sync' },
     { id: 'media', icon: Upload, label: 'Media Upload', desc: 'Upload images, videos & PDFs' },
   ];
 
@@ -1084,6 +1088,7 @@ export default function AdminPage() {
       'deployments-page',
       'partners',
       'devices',
+      'surveys',
       'media',
     ];
     return (allowed as string[]).includes(raw) ? (raw as AdminSection) : 'visibility';
@@ -2686,6 +2691,16 @@ export default function AdminPage() {
             {/* ── Section: Master Data & Telemetry ────────────────────────── */}
             {activeSection === 'master-tables' && <MasterTablesSection />}
 
+            {activeSection === 'surveys' && (
+              <div className="space-y-6">
+                <SectionHeader
+                  title="Surveys"
+                  desc="Push a survey's wells to the portable devices, sync their readings back, and mark surveys completed (drives the dashboard's Latest Survey Snapshot)."
+                />
+                <SurveyAdminSection />
+              </div>
+            )}
+
             {/* ── Section: Device Master Data ───────────────────────────── */}
             {activeSection === 'devices' && (
               <DeviceMasterSection
@@ -3701,6 +3716,7 @@ function MasterTablesSection() {
 
                 for (const [batchKey, batchNode] of Object.entries(readings)) {
                   if (!batchNode || typeof batchNode !== 'object') continue;
+                  if (isPortableDeviceBatch(batchKey, batchNode)) continue; // synced into survey_reading below
                   const deviceId = batchKey;
                   const wellId = `WEL-${deviceId}`;
 
@@ -4085,9 +4101,17 @@ function MasterTablesSection() {
                 }
               }
 
+              // Portable (Porta-*) readings were skipped above — they go to survey_reading instead.
+              const surveySync = await syncPortableReadings().catch((err) => {
+                console.warn('[Firebase Sync] Portable survey sync failed:', err);
+                return null;
+              });
+
               toast({
                 title: '30-Day Firebase Data Sync Complete',
-                description: `Successfully processed ${devCount} devices and ${rawCount} raw readings into Supabase master and summary tables.`,
+                description: `Successfully processed ${devCount} devices and ${rawCount} raw readings into Supabase master and summary tables.${
+                  surveySync ? ` Survey readings: ${surveySync.saved} saved, ${surveySync.unmatched.length} unmatched.` : ''
+                }`,
               });
 
             } catch (e: any) {
