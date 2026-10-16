@@ -1,4 +1,4 @@
-import { get, ref, remove, set } from 'firebase/database';
+import { get, onValue, ref, remove, set } from 'firebase/database';
 import { database } from '@/lib/firebaseClient';
 import { supabase } from '@/lib/supabaseClient';
 import { isPortableDeviceBatch } from '@/lib/data';
@@ -125,15 +125,46 @@ export async function fetchFirebaseSurveyMeta(): Promise<FirebaseSurveyMeta | nu
   return (snapshot.val() as FirebaseSurveyMeta | null) ?? null;
 }
 
+export interface FirebaseSurveyNode {
+  meta: FirebaseSurveyMeta;
+  villages: Record<string, { village: string; district: string; wells: Record<string, { wellId: string; wellName: string }> }>;
+  wells: Record<string, { wellId: string; wellName: string; village: string; district: string }>;
+}
+
+/** One survey well as the admin preview shows it, before it is written to Firebase. */
+export interface SurveyDeviceWell {
+  wellId: string;
+  wellName: string;
+  village: string;
+  district: string;
+  wellStatus: 'Pending' | 'Surveyed' | 'Skipped';
+}
+
+export interface SurveyDevicePayload {
+  survey: { surveyId: string; surveyName: string; organizationName: string; surveyorName: string | null; status: SurveyStatus };
+  /** Every well in the survey, whether or not it ends up in `node`. */
+  wells: SurveyDeviceWell[];
+  /** Exactly what `pushSurveyToFirebase` writes to RTDB `latestSurvey/` (pushedAt is refreshed on push). */
+  node: FirebaseSurveyNode;
+}
+
+export interface BuildPayloadOptions {
+  /** Leave out wells already Surveyed/Skipped — for sending a team back for the wells they missed. */
+  onlyPending?: boolean;
+}
+
 /**
- * Replace RTDB `latestSurvey/` with this survey's wells. Shape (both views of the same list, so the
- * device form can either cascade village -> well or look a well up directly):
+ * Read one survey's wells from Supabase and shape them into the RTDB `latestSurvey/` node. Shape
+ * (both views of the same list, so the device form can either cascade village -> well or look a
+ * well up directly):
  *   latestSurvey/meta                         { surveyId, surveyName, organizationName, ... }
  *   latestSurvey/villages/{villageKey}        { village, district, wells: { WEL-..: { wellId, wellName } } }
  *   latestSurvey/wells/{wellId}               { wellId, wellName, village, district }
- * A Planned survey is moved to In Progress, since pushing it to the device starts it.
  */
-export async function pushSurveyToFirebase(surveyId: string): Promise<FirebaseSurveyMeta> {
+export async function buildSurveyDevicePayload(
+  surveyId: string,
+  { onlyPending = false }: BuildPayloadOptions = {},
+): Promise<SurveyDevicePayload> {
   const { data: survey, error: surveyError } = await supabase
     .from('survey_master')
     .select('survey_id, survey_name, organization_name, surveyor_name, status')
@@ -143,24 +174,27 @@ export async function pushSurveyToFirebase(surveyId: string): Promise<FirebaseSu
 
   const { data: wellRows, error: wellError } = await supabase
     .from('survey_well')
-    .select('well_id, well_master ( well_name, location_master ( village_city, district ) )')
-    .eq('survey_id', surveyId);
+    .select('well_id, well_status, well_master ( well_name, location_master ( village_city, district ) )')
+    .eq('survey_id', surveyId)
+    .order('well_id');
   if (wellError) throw wellError;
-  if (!wellRows?.length) throw new Error('This survey has no wells assigned yet.');
 
-  const villages: Record<string, { village: string; district: string; wells: Record<string, { wellId: string; wellName: string }> }> = {};
-  const wells: Record<string, { wellId: string; wellName: string; village: string; district: string }> = {};
+  const wellList: SurveyDeviceWell[] = ((wellRows || []) as any[]).map((row) => ({
+    wellId: String(row.well_id),
+    wellName: row.well_master?.well_name ?? String(row.well_id),
+    village: row.well_master?.location_master?.village_city ?? 'Unknown',
+    district: row.well_master?.location_master?.district ?? 'Unknown',
+    wellStatus: row.well_status,
+  }));
 
-  for (const row of wellRows as any[]) {
-    const wellId = String(row.well_id);
-    const wellName = row.well_master?.well_name ?? wellId;
-    const village = row.well_master?.location_master?.village_city ?? 'Unknown';
-    const district = row.well_master?.location_master?.district ?? 'Unknown';
-    const villageKey = firebaseKey(village);
-
-    villages[villageKey] ??= { village, district, wells: {} };
-    villages[villageKey].wells[firebaseKey(wellId)] = { wellId, wellName };
-    wells[firebaseKey(wellId)] = { wellId, wellName, village, district };
+  const villages: FirebaseSurveyNode['villages'] = {};
+  const wells: FirebaseSurveyNode['wells'] = {};
+  for (const w of wellList) {
+    if (onlyPending && w.wellStatus !== 'Pending') continue;
+    const villageKey = firebaseKey(w.village);
+    villages[villageKey] ??= { village: w.village, district: w.district, wells: {} };
+    villages[villageKey].wells[firebaseKey(w.wellId)] = { wellId: w.wellId, wellName: w.wellName };
+    wells[firebaseKey(w.wellId)] = { wellId: w.wellId, wellName: w.wellName, village: w.village, district: w.district };
   }
 
   const meta: FirebaseSurveyMeta = {
@@ -173,10 +207,46 @@ export async function pushSurveyToFirebase(surveyId: string): Promise<FirebaseSu
     villageCount: Object.keys(villages).length,
   };
 
-  await set(ref(database, FIREBASE_SURVEY_PATH), { meta, villages, wells });
+  return {
+    survey: {
+      surveyId: survey.survey_id,
+      surveyName: survey.survey_name,
+      organizationName: survey.organization_name,
+      surveyorName: survey.surveyor_name ?? null,
+      status: survey.status,
+    },
+    wells: wellList,
+    node: { meta, villages, wells },
+  };
+}
+
+/**
+ * Replace RTDB `latestSurvey/` with this survey's wells (see buildSurveyDevicePayload for the shape).
+ * A Planned survey is moved to In Progress, since pushing it to the device starts it.
+ */
+export async function pushSurveyToFirebase(surveyId: string, options: BuildPayloadOptions = {}): Promise<FirebaseSurveyMeta> {
+  const { survey, node } = await buildSurveyDevicePayload(surveyId, options);
+  if (!node.meta.wellCount) {
+    throw new Error(options.onlyPending ? 'Every well in this survey is already Surveyed or Skipped.' : 'This survey has no wells assigned yet.');
+  }
+  node.meta.pushedAt = new Date().toISOString();
+
+  await set(ref(database, FIREBASE_SURVEY_PATH), node);
 
   if (survey.status === 'Planned') await setSurveyStatus(surveyId, 'In Progress');
-  return meta;
+  return node.meta;
+}
+
+/** Live view of RTDB `latestSurvey/` — what the portable devices see right now. Returns an unsubscribe. */
+export function subscribeFirebaseSurvey(
+  onChange: (node: FirebaseSurveyNode | null) => void,
+  onError?: (err: Error) => void,
+): () => void {
+  return onValue(
+    ref(database, FIREBASE_SURVEY_PATH),
+    (snapshot) => onChange((snapshot.val() as FirebaseSurveyNode | null) ?? null),
+    onError,
+  );
 }
 
 export async function clearFirebaseSurvey(): Promise<void> {

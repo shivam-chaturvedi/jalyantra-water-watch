@@ -1,20 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CloudDownload, CloudUpload, Eraser, Plus, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CloudDownload, CloudUpload, Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/supabaseClient';
+import { SurveyDevicePushPanel } from '@/components/SurveyDevicePushPanel';
 import {
   clearFirebaseSurvey,
-  fetchFirebaseSurveyMeta,
   fetchSurveys,
-  FIREBASE_SURVEY_PATH,
-  FirebaseSurveyMeta,
+  FirebaseSurveyNode,
   PortableSyncResult,
   pushSurveyToFirebase,
   setSurveyStatus,
+  subscribeFirebaseSurvey,
   SurveySummary,
   syncPortableReadings,
 } from '@/lib/surveySync';
@@ -147,23 +147,23 @@ function NewSurveyForm({ onCreated, onCancel }: { onCreated: () => void; onCance
 /**
  * Admin → Surveys. Supabase is the source of truth for surveys; these controls move data to and
  * from Firebase (see src/lib/surveySync.ts):
- *  - Push to device: Supabase survey wells -> RTDB latestSurvey/ (feeds the portable form dropdowns)
- *  - Clear device list: empties RTDB latestSurvey/
+ *  - Send to devices panel: preview a survey's wells, compare with the live RTDB latestSurvey/, push or clear
  *  - Sync portable readings: RTDB readings/Porta-* -> survey_reading
  *  - Mark completed: moves the dashboard's "Latest Survey Snapshot" to this survey
  */
 export function SurveyAdminSection() {
   const [surveys, setSurveys] = useState<SurveySummary[]>([]);
-  const [firebaseMeta, setFirebaseMeta] = useState<FirebaseSurveyMeta | null>(null);
+  const [firebaseNode, setFirebaseNode] = useState<FirebaseSurveyNode | null>(null);
+  const [selectedSurveyId, setSelectedSurveyId] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<PortableSyncResult | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [showNewSurvey, setShowNewSurvey] = useState(false);
+  const pushPanelRef = useRef<HTMLDivElement>(null);
+  const firebaseMeta = firebaseNode?.meta ?? null;
 
   const load = useCallback(async () => {
     try {
-      const [list, meta] = await Promise.all([fetchSurveys(), fetchFirebaseSurveyMeta().catch(() => null)]);
-      setSurveys(list);
-      setFirebaseMeta(meta);
+      setSurveys(await fetchSurveys());
     } catch (err) {
       toast({ title: 'Could not load surveys', description: errorMessage(err), variant: 'destructive' });
     }
@@ -172,6 +172,21 @@ export function SurveyAdminSection() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(
+    () =>
+      subscribeFirebaseSurvey(setFirebaseNode, (err) =>
+        toast({ title: 'Could not read Firebase survey list', description: errorMessage(err), variant: 'destructive' }),
+      ),
+    [],
+  );
+
+  // Default the push panel to the survey on the devices, else the newest open one.
+  useEffect(() => {
+    if (selectedSurveyId || !surveys.length) return;
+    const open = surveys.find((s) => s.status === 'Planned' || s.status === 'In Progress');
+    setSelectedSurveyId(firebaseMeta?.surveyId ?? open?.surveyId ?? null);
+  }, [surveys, firebaseMeta?.surveyId, selectedSurveyId]);
 
   const run = async (key: string, action: () => Promise<void>) => {
     setBusyAction(key);
@@ -209,21 +224,6 @@ export function SurveyAdminSection() {
           <CloudDownload className="h-4 w-4" />
           Sync portable readings (Firebase → Supabase)
         </Button>
-        <Button
-          variant="outline"
-          className="gap-2"
-          disabled={busy || !firebaseMeta}
-          onClick={() => {
-            if (!window.confirm(`Remove the survey well list from Firebase (${FIREBASE_SURVEY_PATH}/)? Devices will have no wells to pick until a survey is pushed again.`)) return;
-            run('clear', async () => {
-              await clearFirebaseSurvey();
-              toast({ title: 'Firebase survey list cleared' });
-            });
-          }}
-        >
-          <Eraser className="h-4 w-4" />
-          Clear device list in Firebase
-        </Button>
         <Button variant="outline" className="gap-2" disabled={busy} onClick={() => setShowNewSurvey((v) => !v)}>
           <Plus className="h-4 w-4" />
           New survey
@@ -244,21 +244,30 @@ export function SurveyAdminSection() {
         />
       )}
 
-      <Card className="p-4 space-y-1 bg-muted/30">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          On the portable devices now (Firebase {FIREBASE_SURVEY_PATH}/)
-        </p>
-        {firebaseMeta ? (
-          <p className="text-sm">
-            <span className="font-semibold">{firebaseMeta.surveyName}</span>{' '}
-            <span className="font-mono text-xs text-muted-foreground">{firebaseMeta.surveyId}</span> —{' '}
-            {firebaseMeta.wellCount} wells in {firebaseMeta.villageCount} villages · pushed{' '}
-            {new Date(firebaseMeta.pushedAt).toLocaleString()}
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">Empty — no survey has been pushed.</p>
-        )}
-      </Card>
+      <div ref={pushPanelRef}>
+        <SurveyDevicePushPanel
+          surveys={surveys}
+          selectedSurveyId={selectedSurveyId}
+          onSelectSurvey={setSelectedSurveyId}
+          firebaseNode={firebaseNode}
+          busy={busy}
+          onPush={(surveyId, onlyPending) =>
+            run(`push-${surveyId}`, async () => {
+              const meta = await pushSurveyToFirebase(surveyId, { onlyPending });
+              toast({
+                title: 'Pushed to Firebase',
+                description: `${meta.wellCount} wells in ${meta.villageCount} villages are now on the device form.`,
+              });
+            })
+          }
+          onClear={() =>
+            run('clear', async () => {
+              await clearFirebaseSurvey();
+              toast({ title: 'Firebase survey list cleared' });
+            })
+          }
+        />
+      </div>
 
       {lastSync && lastSync.unmatched.length > 0 && (
         <Card className="p-4 space-y-2 border-amber-200 bg-amber-50">
@@ -311,18 +320,13 @@ export function SurveyAdminSection() {
                       variant="outline"
                       className="h-7 gap-1 text-xs"
                       disabled={busy || s.status === 'Cancelled' || s.wellCount === 0}
-                      onClick={() =>
-                        run(`push-${s.surveyId}`, async () => {
-                          const meta = await pushSurveyToFirebase(s.surveyId);
-                          toast({
-                            title: 'Pushed to Firebase',
-                            description: `${meta.wellCount} wells in ${meta.villageCount} villages are now on the device form.`,
-                          });
-                        })
-                      }
+                      onClick={() => {
+                        setSelectedSurveyId(s.surveyId);
+                        pushPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
                     >
                       <CloudUpload className="h-3.5 w-3.5" />
-                      Push to device
+                      Send to device…
                     </Button>
                     {s.status !== 'Completed' && s.status !== 'Cancelled' && (
                       <Button
