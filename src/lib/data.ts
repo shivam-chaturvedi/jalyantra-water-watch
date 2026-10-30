@@ -1,3 +1,8 @@
+import {
+  DEVICE_ONLINE_MAX_AGE_MS,
+  readingQualityOk,
+} from '../../supabase/functions/_shared/sensorLogic';
+
 /** Known RTDB fields; Firebase may include additional keys — those are preserved in `rtdbExport`. */
 export interface FirebaseReadingEntry {
   collectedDate?: string;
@@ -380,6 +385,8 @@ export interface SensorReading {
   validationFlags?: string[];
   /** From device master data — false for electrical-only (non-pump) installations. */
   isPumpConnected?: boolean;
+  /** Registered device that has sent no timestamped readings — `depth` is a placeholder, not a measurement. */
+  noReadings?: boolean;
 }
 
 function readingCoords(
@@ -401,6 +408,8 @@ function mapLeafToHistoryPoint(
 ): ExtendedHistoryPoint | null {
   const en = entry as FirebaseReadingEntry;
   if (isUnsyncedReadingEntry(en)) return null;
+  // The device marks readings it doesn't trust (e.g. weak echo) with quality.qualityOk = false.
+  if (readingQualityOk(entry) === false) return null;
 
   const raw = entry;
   const coords = readingCoords(en, raw);
@@ -473,6 +482,7 @@ export function mergeReadingsWithDeviceRegistry(
       status: 'offline',
       lastSync: new Date(syncMs).toISOString(),
       history: [],
+      noReadings: true,
       validationFlags: ['Registered in devices tree — no timestamped readings yet'],
     });
   }
@@ -573,10 +583,8 @@ const districtCenters = [
   { name: 'Raigad', lat: 18.5158, long: 73.1822 },
 ];
 
-const STATUS_FRESH_THRESHOLD_MS = 1000 * 60 * 60 * 24 * 30; // 30 days for demo purposes
-
 function getSensorStatusFromTimestamp(timestamp: number): 'active' | 'offline' {
-  return Date.now() - timestamp < STATUS_FRESH_THRESHOLD_MS ? 'active' : 'offline';
+  return Date.now() - timestamp <= DEVICE_ONLINE_MAX_AGE_MS ? 'active' : 'offline';
 }
 
 export function matchDistrictName(lat?: number, long?: number): string {
@@ -835,8 +843,10 @@ export function calculateDistrictStats(readings: SensorReading[]): District[] {
   const districts: District[] = [];
 
   districtMap.forEach((districtReadings, districtName) => {
+    // Devices with no readings carry a placeholder depth of 0 — leave them out of the average.
+    const measured = districtReadings.filter((reading) => !reading.noReadings);
     const avgDepth =
-      districtReadings.reduce((sum, reading) => sum + reading.depth, 0) / districtReadings.length;
+      measured.length > 0 ? measured.reduce((sum, reading) => sum + reading.depth, 0) / measured.length : 0;
 
     const latestTimestamp = Math.max(
       ...districtReadings.flatMap((reading) => reading.history.map((point) => point.timestamp)),
@@ -908,9 +918,21 @@ export function calculateDistrictStats(readings: SensorReading[]): District[] {
   return districts;
 }
 
-export function generateAlerts(districts: District[]): Alert[] {
+export function generateAlerts(districts: District[], sensors: SensorReading[] = []): Alert[] {
   const alerts: Alert[] = [];
   const now = new Date().toISOString();
+
+  const offline = sensors.filter((sensor) => sensor.status === 'offline');
+  if (offline.length > 0) {
+    alerts.push({
+      id: 'alert-offline-sensors',
+      type: 'offline_sensor',
+      district: 'Network',
+      message: `${offline.length} of ${sensors.length} wells offline (no reading in the last 24 h)`,
+      severity: offline.length === sensors.length ? 'critical' : 'warning',
+      timestamp: now,
+    });
+  }
 
   const decliningDistricts = districts.filter((d) => d.change30Days < -1);
   decliningDistricts.forEach((district) => {
@@ -935,17 +957,6 @@ export function generateAlerts(districts: District[]): Alert[] {
       timestamp: now,
     });
   });
-
-  if (alerts.length < 3 && districts.length) {
-    alerts.push({
-      id: 'alert-offline-fallback',
-      type: 'offline_sensor',
-      district: districts[0].name,
-      message: 'Sensors are being monitored continuously — no critical alerts at this time.',
-      severity: 'info',
-      timestamp: now,
-    });
-  }
 
   return alerts.slice(0, 5);
 }
@@ -985,10 +996,11 @@ export function getRiskTextColorClass(risk: 'safe' | 'moderate' | 'warning' | 'c
 
 export function calculateKPIStats(readings: SensorReading[], districts: District[]): KPIStats {
   const activeSensors = readings.filter((reading) => reading.status === 'active').length;
+  const measured = readings.filter((reading) => !reading.noReadings);
   const avgDepth =
-    readings.length === 0
+    measured.length === 0
       ? 0
-      : readings.reduce((sum, reading) => sum + reading.depth, 0) / readings.length;
+      : measured.reduce((sum, reading) => sum + reading.depth, 0) / measured.length;
   const criticalDistricts = districts.filter((district) => district.riskLevel === 'critical').length;
   const criticalPercentage = districts.length ? Math.round((criticalDistricts / districts.length) * 100) : 0;
   const fastestDeclining =

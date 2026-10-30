@@ -24,6 +24,7 @@ import { ZoomableImage } from "@/components/ImageModalContext";
 import { FileText, PlayCircle, Video, Award } from "lucide-react";
 import { SiteNav } from "@/components/SiteNav";
 import { useGroundwaterData } from "@/hooks/useGroundwaterData";
+import { supabase } from "@/lib/supabaseClient";
 
 const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
   event.preventDefault();
@@ -114,6 +115,17 @@ export default function Home() {
     queryKey: ["site_content", "home"],
     queryFn: () => fetchSiteContent("home"),
   });
+  const readingsCountQuery = useQuery({
+    queryKey: ["raw_sensor_data", "count"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("raw_sensor_data")
+        .select("id", { count: "exact", head: true });
+      if (error) throw error;
+      return count ?? 0;
+    },
+    refetchInterval: 60_000,
+  });
   const deploymentsPreviewQuery = useQuery({
     queryKey: ["deployments", "alibaug-raigad", "preview"],
     queryFn: () => fetchDeployment("alibaug-raigad"),
@@ -178,7 +190,14 @@ export default function Home() {
     const urls = arr.filter((x: unknown) => typeof x === "string") as string[];
     return urls.length ? urls.slice(0, 4) : [];
   }, [deploymentsPreview?.previewImages]);
-  const impactMetrics =
+  const liveReadingsCount = readingsCountQuery.data;
+  const liveReadingsValue =
+    liveReadingsCount != null
+      ? liveReadingsCount >= 1000
+        ? `${Math.floor(liveReadingsCount / 1000).toLocaleString("en-IN")}K+`
+        : String(liveReadingsCount)
+      : null;
+  const impactMetrics = (
     dashboardContent.impactMetrics.length > 0
       ? dashboardContent.impactMetrics
       : [
@@ -187,7 +206,11 @@ export default function Home() {
           { label: "Districts Covered", value: String(homeContent.dashboard.stats[2]?.value ?? "0"), note: "Geographies represented in the dataset" },
           { label: "Total Readings", value: String(totalReadings), note: "Historical samples and event points" },
           { label: "Water Observed", value: totalWaterMonitored > 0 ? `${(totalWaterMonitored / 1000).toFixed(1)}K m` : "0", note: "Approximate cumulative water monitored" },
-        ];
+        ]
+  ).map((metric) =>
+    // Readings count is always live from Supabase; CMS value is only a fallback while loading
+    liveReadingsValue && /reading/i.test(metric.label) ? { ...metric, value: liveReadingsValue } : metric,
+  );
   const actionableInsights =
     dashboardContent.actionableInsights.length > 0
       ? dashboardContent.actionableInsights

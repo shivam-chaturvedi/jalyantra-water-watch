@@ -17,6 +17,7 @@ import {
 import { database } from '@/lib/firebaseClient';
 import { fetchAllDeviceMasterData, type DeviceMasterData } from '@/lib/siteAdmin';
 import { supabase } from '@/lib/supabaseClient';
+import { DEVICE_ONLINE_MAX_AGE_MS } from '../../supabase/functions/_shared/sensorLogic';
 import { saveDashboardCache, loadDashboardCache, isCacheValid } from '@/lib/dashboardCache';
 
 const SUPABASE_DASHBOARD_RAW_LIMIT = 5000;
@@ -75,7 +76,7 @@ function calculateAndPublish(
   setAvailableDates: (dates: string[]) => void,
 ) {
   const districtData = calculateDistrictStats(sensorData);
-  const alertData = generateAlerts(districtData);
+  const alertData = generateAlerts(districtData, sensorData);
   const kpiData = calculateKPIStats(sensorData, districtData);
 
   setRawSensors(sensorData);
@@ -170,7 +171,7 @@ async function fetchSupabaseDashboardSensors(): Promise<SensorReading[]> {
         long,
         village: location?.village_city || 'Unknown',
         district: location?.district || 'Unknown',
-        status: Date.now() - latestTimestamp < 1000 * 60 * 60 * 24 * 30 ? 'active' : 'offline',
+        status: Date.now() - latestTimestamp <= DEVICE_ONLINE_MAX_AGE_MS ? 'active' : 'offline',
         lastSync: latest.timestamp,
         history,
       } satisfies SensorReading;
@@ -304,7 +305,7 @@ export function useGroundwaterData(): UseGroundwaterDataReturn {
       // ✅ Save fresh data to cache for instant loading on next refresh
       const districtData = calculateDistrictStats(sensorsWithVillage);
       const kpiData = calculateKPIStats(sensorsWithVillage, districtData);
-      const alertData = generateAlerts(districtData);
+      const alertData = generateAlerts(districtData, sensorsWithVillage);
 
       // Cache WITHOUT history to reduce size (50-100KB vs 5-10MB)
       const sensorsWithoutHistory = sensorsWithVillage.map((sensor) => ({

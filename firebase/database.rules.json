@@ -1,0 +1,32 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "readings": {
+      ".read": true,
+      "$deviceId": {
+        "$readingId": {
+          ".write": "newData.exists()"
+        }
+      }
+    },
+
+    "devices": {
+      ".read": true,
+      "$deviceId": {
+        ".write": true
+      }
+    },
+
+    "latestSurvey": {
+      ".read": true,
+      ".write": true
+    },
+
+    "admins": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}

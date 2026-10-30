@@ -72,11 +72,15 @@ export async function fetchAppPages(): Promise<AppPage[]> {
 }
 
 export async function setAppPageEnabled(path: string, isEnabled: boolean): Promise<void> {
-  const { error } = await supabase.from('app_pages').upsert(
-    { path, is_enabled: isEnabled },
-    { onConflict: 'path' },
-  );
+  // Plain update: an upsert would try to insert a row without the required `title` and fail.
+  const { data, error } = await supabase
+    .from('app_pages')
+    .update({ is_enabled: isEnabled })
+    .eq('path', path)
+    .select('path');
   if (error) throw error;
+  // RLS hides rows it won't let you change, so "no rows" means not allowed (or not logged in as admin).
+  if (!data?.length) throw new Error(`Could not update page ${path} — are you logged in as an admin?`);
 }
 
 export async function listMediaAssets(): Promise<MediaAsset[]> {

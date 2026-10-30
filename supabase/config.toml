@@ -1,4 +1,6 @@
 project_id = "jalyantra-water-watch"
 
 [functions.sync-rtdb-to-supabase]
-verify_jwt = false
+# Callers must send a valid JWT; the function then also requires the service-role key,
+# an x-sync-secret header, or a logged-in admin (the public anon key alone is not enough).
+verify_jwt = true

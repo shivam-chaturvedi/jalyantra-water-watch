@@ -1,13 +1,15 @@
 import type { RtdbCsvRow, SensorHistoryPoint } from '@/lib/data';
+import {
+  detectPumpRunRanges,
+  MIN_PUMP_DRAWDOWN_M,
+  MIN_PUMP_RUN_DURATION_MIN,
+} from '../../supabase/functions/_shared/sensorLogic';
 
 /** Trailing moving-average window (3–5 samples) per pump run for chart noise reduction. */
 export const PUMP_CHART_MA_WINDOW = 5;
 
 /** Depth step for plotted points after smoothing (display only; keep 0.02–0.05). */
 export const PUMP_CHART_DEPTH_DISPLAY_STEP = 0.04;
-
-/** Minimum depth increase from surface that counts as real pumping drawdown. */
-export const MIN_PUMP_DRAWDOWN_M = 0.02;
 
 const Y_AXIS_PAD_M = 0.25;
 const Y_AXIS_MIN_SPAN_M = 0.5;
@@ -129,142 +131,16 @@ export function filterPointsSince(points: SensorHistoryPoint[], sinceMs: number)
     .sort((a, b) => a.timestamp - b.timestamp);
 }
 
-/**
- * Cumulative depth rise (m) from a local minimum required to confirm the pump has started.
- * Filters out sensor noise (~0.01–0.02 m jitter).
- */
-export const PUMP_START_RISE_M = 0.05;
-
-/**
- * Decline (m) from the run's peak depth required to confirm the pump has stopped
- * (water level recovering). The run is closed AT the peak, so recovery samples
- * are never counted inside the run.
- */
-export const PUMP_STOP_RECOVERY_M = 0.03;
-
-/**
- * Max gap (minutes) between one run's end and the next run's start, within the same power-on
- * session, for them to be merged into one continuous pumping episode instead of counted as two
- * separate runs. Real-world pump cycles are reported as a handful of times PER DAY (hours apart) —
- * even a 30-40 minute same-session gap is still a sensor/water-table wobble splitting one pumping
- * episode in two, not a real restart. (Raised from 5 to 30 after live data on well 12 showed runs
- * only 6-40 minutes apart were still surviving as separate "runs" under the 5-minute window.)
- */
-export const PUMP_RUN_MERGE_GAP_MIN = 30;
-
-/**
- * Minimum total duration (minutes) for a (post-merge) run to be counted as a real pump cycle at
- * all, rather than a single noisy 1-2 minute wiggle. Reported real-world pump cycles run far longer
- * than this floor — a "run" shorter than it is sensor noise crossing PUMP_START_RISE_M /
- * PUMP_STOP_RECOVERY_M for one sample, not an actual pump start/stop.
- */
-export const MIN_PUMP_RUN_DURATION_MIN = 3;
-
-/**
- * Cap on how long a chain of merges can grow. Without this, a pump cycling on/off every 15-25
- * minutes all day (every individual gap passes PUMP_RUN_MERGE_GAP_MIN) gets welded into one
- * day-spanning "run" — e.g. a real case merged into a single 989-minute (16.5h) run. 4 hours is
- * generous for one real continuous/closely-cycling pumping session; once a chain would exceed it,
- * stop extending and start a new run instead, even if the next individual gap is still small.
- */
-export const MAX_MERGED_RUN_DURATION_MIN = 4 * 60;
-
-/**
- * Merge index ranges whose gap (time between one range's end sample and the next range's start
- * sample) is within PUMP_RUN_MERGE_GAP_MIN, so noisy dips mid-run don't fragment one pumping
- * episode into several. Ranges list is assumed sorted and non-overlapping (as produced by the
- * single forward pass in detectPumpRunsInSession).
- */
-function mergeAdjacentRanges(
-  session: SensorHistoryPoint[],
-  ranges: { startIdx: number; endIdx: number }[],
-): { startIdx: number; endIdx: number }[] {
-  if (ranges.length <= 1) return ranges;
-  const merged: { startIdx: number; endIdx: number }[] = [{ ...ranges[0] }];
-  for (let i = 1; i < ranges.length; i++) {
-    const prev = merged[merged.length - 1];
-    const gapMin = (session[ranges[i].startIdx].timestamp - session[prev.endIdx].timestamp) / 60000;
-    const mergedDurationMin = (session[ranges[i].endIdx].timestamp - session[prev.startIdx].timestamp) / 60000;
-    if (gapMin <= PUMP_RUN_MERGE_GAP_MIN && mergedDurationMin <= MAX_MERGED_RUN_DURATION_MIN) {
-      prev.endIdx = ranges[i].endIdx;
-    } else {
-      merged.push({ ...ranges[i] });
-    }
-  }
-  return merged;
-}
-
-/**
- * Split points into device power-on sessions using `deviceOnlineSince`.
- * A new session starts only when both neighbours carry a stamp and they differ,
- * so points without a stamp stay attached to the current session. If no point
- * has a stamp, the whole series is one session.
- */
-function splitIntoOnlineSessions(sortedPoints: SensorHistoryPoint[]): SensorHistoryPoint[][] {
-  if (sortedPoints.length === 0) return [];
-  const sessions: SensorHistoryPoint[][] = [];
-  let current: SensorHistoryPoint[] = [sortedPoints[0]];
-  for (let i = 1; i < sortedPoints.length; i++) {
-    const a = sortedPoints[i - 1].deviceOnlineSince?.trim();
-    const b = sortedPoints[i].deviceOnlineSince?.trim();
-    if (a && b && a !== b) {
-      sessions.push(current);
-      current = [sortedPoints[i]];
-    } else {
-      current.push(sortedPoints[i]);
-    }
-  }
-  sessions.push(current);
-  return sessions;
-}
-
-/**
- * Detect actual pumping intervals inside one power-on session from the depth trend.
- *
- * The device can stay online through pumping AND recovery, so `deviceOnlineSince`
- * alone cannot mark pump start/stop. Physically: while the pump runs, depth-to-water
- * RISES (drawdown); once it stops, depth FALLS back (recovery). So:
- *   - a run STARTS at a local minimum once depth has risen ≥ PUMP_START_RISE_M
- *   - a run ENDS at the peak once depth has fallen ≥ PUMP_STOP_RECOVERY_M from it
- * Recovery samples after the peak are excluded, so drawdown is never cancelled out.
- */
-function detectPumpRunsInSession(session: SensorHistoryPoint[]): SensorHistoryPoint[][] {
-  const ranges: { startIdx: number; endIdx: number }[] = [];
-  if (session.length < 2) return [];
-
-  let pumping = false;
-  let minIdx = 0; // candidate run start (local minimum) while idle
-  let peakIdx = 0; // highest depth seen during the current run
-
-  for (let i = 1; i < session.length; i++) {
-    const depth = session[i].depth;
-
-    if (!pumping) {
-      if (depth <= session[minIdx].depth) {
-        minIdx = i;
-      } else if (depth - session[minIdx].depth >= PUMP_START_RISE_M) {
-        pumping = true;
-        peakIdx = i;
-      }
-    } else {
-      if (depth >= session[peakIdx].depth) {
-        peakIdx = i;
-      } else if (session[peakIdx].depth - depth >= PUMP_STOP_RECOVERY_M) {
-        // Recovery confirmed — close the run at its peak (actual pump stop)
-        ranges.push({ startIdx: minIdx, endIdx: peakIdx });
-        pumping = false;
-        minIdx = i;
-      }
-    }
-  }
-
-  if (pumping) {
-    ranges.push({ startIdx: minIdx, endIdx: peakIdx });
-  }
-
-  // Fold sensor-jitter fragments back together before slicing out the final run point-arrays.
-  return mergeAdjacentRanges(session, ranges).map((r) => session.slice(r.startIdx, r.endIdx + 1));
-}
+// Pump-run thresholds and detection live in one shared file so the dashboard and both database
+// syncs always count the same runs.
+export {
+  MIN_PUMP_DRAWDOWN_M,
+  PUMP_START_RISE_M,
+  PUMP_STOP_RECOVERY_M,
+  PUMP_RUN_MERGE_GAP_MIN,
+  MIN_PUMP_RUN_DURATION_MIN,
+  MAX_MERGED_RUN_DURATION_MIN,
+} from '../../supabase/functions/_shared/sensorLogic';
 
 /**
  * Segment readings into pump runs: group by `deviceOnlineSince` power-on session,
@@ -273,11 +149,12 @@ function detectPumpRunsInSession(session: SensorHistoryPoint[]): SensorHistoryPo
  */
 export function segmentIntoPumpEvents(sortedPoints: SensorHistoryPoint[]): SensorHistoryPoint[][] {
   if (sortedPoints.length === 0) return [];
-  const events: SensorHistoryPoint[][] = [];
-  for (const session of splitIntoOnlineSessions(sortedPoints)) {
-    events.push(...detectPumpRunsInSession(session));
-  }
-  return events;
+  const points = sortedPoints.map((p) => ({
+    depth: p.depth,
+    timestampMs: p.timestamp,
+    onlineSince: p.deviceOnlineSince,
+  }));
+  return detectPumpRunRanges(points).map((r) => sortedPoints.slice(r.startIdx, r.endIdx + 1));
 }
 
 export type PumpChartRow = {

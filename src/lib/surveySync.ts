@@ -1,5 +1,5 @@
 import { get, onValue, ref, remove, set } from 'firebase/database';
-import { database } from '@/lib/firebaseClient';
+import { database, firebaseConfig } from '@/lib/firebaseClient';
 import { supabase } from '@/lib/supabaseClient';
 import { isPortableDeviceBatch } from '@/lib/data';
 
@@ -17,10 +17,8 @@ import { isPortableDeviceBatch } from '@/lib/data';
 export const FIREBASE_SURVEY_PATH =
   (import.meta.env.VITE_FIREBASE_SURVEY_PATH as string | undefined) ?? 'latestSurvey';
 
-const RTDB_URL =
-  import.meta.env.VITE_FIREBASE_DATABASE_URL ||
-  'https://water-sensor-a14d5-default-rtdb.asia-southeast1.firebasedatabase.app';
-const RTDB_API_KEY = import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyBefKppOOhTLAwIfzbxXOAQ4iOgJLL_EGA';
+const RTDB_URL = firebaseConfig.databaseURL;
+const RTDB_API_KEY = firebaseConfig.apiKey;
 
 export type SurveyStatus = 'Planned' | 'In Progress' | 'Completed' | 'Cancelled';
 

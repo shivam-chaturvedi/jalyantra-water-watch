@@ -53,6 +53,35 @@ import { useLiveDevices } from '@/hooks/useLiveDevices';
 import { SurveyAdminSection } from '@/components/SurveyAdminSection';
 import { syncPortableReadings } from '@/lib/surveySync';
 import { isPortableDeviceBatch, matchDistrictName } from '@/lib/data';
+import { firebaseConfig } from '@/lib/firebaseClient';
+import {
+  addDaysToDateKey,
+  depthChangeOverDays,
+  detectPumpRunRanges,
+  deviceHealthForDay,
+  isCountablePumpRun,
+  istDateKey,
+  istNoonIso,
+  isUsableDepth,
+  medianOf,
+  type PumpPoint,
+  readingQualityOk,
+  readingTimestampMs,
+  rollingCalendarWindow,
+  syncWindowStartMs,
+  wellAreaM2,
+  wellSafety,
+} from '../../supabase/functions/_shared/sensorLogic';
+
+// Supabase returns plain { message, code } objects, not Error instances.
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === 'object' && 'message' in err) {
+    const { message, code } = err as { message: unknown; code?: unknown };
+    return code ? `${String(message)} (${String(code)})` : String(message);
+  }
+  return String(err);
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -240,7 +269,7 @@ function MediaUploadField({
       } catch (err) {
         toast({
           title: 'Upload failed',
-          description: err instanceof Error ? err.message : String(err),
+          description: errorMessage(err),
           variant: 'destructive',
         });
       } finally {
@@ -1134,13 +1163,13 @@ export default function AdminPage() {
   const updateFlag = useMutation({
     mutationFn: ({ key, value }: { key: SiteFlagKey; value: boolean }) => setSiteFlag(key, value),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['site_flags'] }),
-    onError: (err) => toast({ title: 'Error', description: err instanceof Error ? err.message : String(err), variant: 'destructive' }),
+    onError: (err) => toast({ title: 'Error', description: errorMessage(err), variant: 'destructive' }),
   });
 
   const updatePageEnabled = useMutation({
     mutationFn: ({ path, enabled }: { path: string; enabled: boolean }) => setAppPageEnabled(path, enabled),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['app_pages'] }),
-    onError: (err) => toast({ title: 'Error', description: err instanceof Error ? err.message : String(err), variant: 'destructive' }),
+    onError: (err) => toast({ title: 'Error', description: errorMessage(err), variant: 'destructive' }),
   });
 
   const saveHomeContent = useMutation({
@@ -1150,7 +1179,7 @@ export default function AdminPage() {
       await queryClient.invalidateQueries({ queryKey: ['site_content', 'home'] });
       toast({ title: 'Home content saved' });
     },
-    onError: (err) => toast({ title: 'Save failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' }),
+    onError: (err) => toast({ title: 'Save failed', description: errorMessage(err), variant: 'destructive' }),
   });
 
   const savePartnersContent = useMutation({
@@ -1160,7 +1189,7 @@ export default function AdminPage() {
       await queryClient.invalidateQueries({ queryKey: ['site_content', 'partners'] });
       toast({ title: 'Partners content saved' });
     },
-    onError: (err) => toast({ title: 'Save failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' }),
+    onError: (err) => toast({ title: 'Save failed', description: errorMessage(err), variant: 'destructive' }),
   });
 
   const saveDeploymentMut = useMutation({
@@ -1170,7 +1199,7 @@ export default function AdminPage() {
       await queryClient.invalidateQueries({ queryKey: ['all_deployments'] });
       toast({ title: 'Deployment saved' });
     },
-    onError: (err) => toast({ title: 'Save failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' }),
+    onError: (err) => toast({ title: 'Save failed', description: errorMessage(err), variant: 'destructive' }),
   });
 
   const deleteDeploymentMut = useMutation({
@@ -1179,7 +1208,7 @@ export default function AdminPage() {
       await queryClient.invalidateQueries({ queryKey: ['all_deployments'] });
       toast({ title: 'Deployment deleted' });
     },
-    onError: (err) => toast({ title: 'Delete failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' }),
+    onError: (err) => toast({ title: 'Delete failed', description: errorMessage(err), variant: 'destructive' }),
   });
 
   const saveDeviceMut = useMutation({
@@ -1188,7 +1217,7 @@ export default function AdminPage() {
       await queryClient.invalidateQueries({ queryKey: ['device_master_data'] });
       toast({ title: 'Device saved' });
     },
-    onError: (err) => toast({ title: 'Save failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' }),
+    onError: (err) => toast({ title: 'Save failed', description: errorMessage(err), variant: 'destructive' }),
   });
 
   const deleteDeviceMut = useMutation({
@@ -1197,7 +1226,7 @@ export default function AdminPage() {
       await queryClient.invalidateQueries({ queryKey: ['device_master_data'] });
       toast({ title: 'Device removed' });
     },
-    onError: (err) => toast({ title: 'Delete failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' }),
+    onError: (err) => toast({ title: 'Delete failed', description: errorMessage(err), variant: 'destructive' }),
   });
 
   const createDeploymentMut = useMutation({
@@ -1208,7 +1237,7 @@ export default function AdminPage() {
       await queryClient.invalidateQueries({ queryKey: ['all_deployments'] });
       toast({ title: 'Deployment created', description: 'Fill in the details below.' });
     },
-    onError: (err) => toast({ title: 'Create failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' }),
+    onError: (err) => toast({ title: 'Create failed', description: errorMessage(err), variant: 'destructive' }),
   });
 
   const isBusy =
@@ -2989,7 +3018,7 @@ function MediaLibrarySection() {
         toast({ title: 'Uploaded', description: file.name });
       }
     } catch (err) {
-      toast({ title: 'Upload failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' });
+      toast({ title: 'Upload failed', description: errorMessage(err), variant: 'destructive' });
     } finally {
       setUploading(false);
     }
@@ -3420,8 +3449,8 @@ function MasterTablesSection() {
             try {
               toast({ title: 'Syncing Firebase Data', description: `Fetching last ${timeRangeDays} days RTDB telemetry & computing metrics…` });
 
-              const rtdbUrl = import.meta.env.VITE_FIREBASE_DATABASE_URL || 'https://water-sensor-a14d5-default-rtdb.asia-southeast1.firebasedatabase.app';
-              const apiKey = import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyBefKppOOhTLAwIfzbxXOAQ4iOgJLL_EGA';
+              const rtdbUrl = firebaseConfig.databaseURL;
+              const apiKey = firebaseConfig.apiKey;
 
               console.log('[Firebase Sync] Fetching devices and readings from Firebase RTDB:', rtdbUrl);
 
@@ -3444,7 +3473,9 @@ function MasterTablesSection() {
 
               let devCount = 0;
               let rawCount = 0;
-              const cutoffTimeMs = Date.now() - (timeRangeDays * 24 * 60 * 60 * 1000);
+              // Starts at 00:00 IST so the first day is processed whole — its pump runs are deleted and rebuilt below.
+              const cutoffTimeMs = syncWindowStartMs(timeRangeDays);
+              const windowStartDate = istDateKey(cutoffTimeMs);
 
               // Seed Static Alert Definitions (Table I)
               await supabase.from('alert_definitions').upsert([
@@ -3470,50 +3501,6 @@ function MasterTablesSection() {
                 if (value === null || value === undefined || value === '') return undefined;
                 const n = Number(value);
                 return Number.isFinite(n) ? n : undefined;
-              };
-
-              // Noise floor for pump-run detection — matches the PUMP_START_RISE_M reasoning in pumpEvents.ts
-              const PUMP_MIN_RUN_DROP_M = 0.05;
-              // Readings arrive ~60s apart, so a 60s floor was a no-op (any 2-point run already clears
-              // it) — that's why wells kept logging dozens of 1-minute "runs" a day. Raised to
-              // meaningfully exceed the sampling interval, matching MIN_PUMP_RUN_DURATION_MIN in pumpEvents.ts.
-              const PUMP_MIN_RUN_DURATION_MS = 3 * 60_000;
-              // Max gap (minutes) between one run's end and the next run's start for them to be merged
-              // into one continuous pumping episode instead of counted as two separate runs. Real-world
-              // pump cycles are reported as a handful of times PER DAY (hours apart) — even a 30-40
-              // minute gap is still a sensor/water-table wobble splitting one pumping episode in two,
-              // not a real restart. (Raised from 5 to 30 after live data on well 12 showed runs only
-              // 6-40 minutes apart were still surviving as separate "runs" under the 5-minute window.)
-              // Mirrors PUMP_RUN_MERGE_GAP_MIN in pumpEvents.ts.
-              const PUMP_RUN_MERGE_GAP_MIN = 30;
-              // Cap on how long a chain of merges can grow. Without this, a pump cycling on/off every
-              // 15-25 minutes all day (every individual gap passes PUMP_RUN_MERGE_GAP_MIN) gets welded
-              // into one day-spanning "run" — e.g. a real case merged into a single 989-minute (16.5h)
-              // run. 4 hours is generous for one real continuous/closely-cycling pumping session; once
-              // a chain would exceed it, stop extending and start a new run instead, even if the next
-              // individual gap is still small.
-              const MAX_MERGED_RUN_DURATION_MIN = 4 * 60;
-
-              // Fold adjacent raw run ranges together when the gap between them is small — see
-              // PUMP_RUN_MERGE_GAP_MIN and MAX_MERGED_RUN_DURATION_MIN. `ranges` is assumed
-              // sorted/non-overlapping (single forward pass).
-              const mergeAdjacentRuns = (
-                sorted: { depth: number; timestampMs: number }[],
-                ranges: { startIdx: number; endIdx: number }[],
-              ): { startIdx: number; endIdx: number }[] => {
-                if (ranges.length <= 1) return ranges;
-                const merged: { startIdx: number; endIdx: number }[] = [{ ...ranges[0] }];
-                for (let i = 1; i < ranges.length; i++) {
-                  const prev = merged[merged.length - 1];
-                  const gapMin = (sorted[ranges[i].startIdx].timestampMs - sorted[prev.endIdx].timestampMs) / 60000;
-                  const mergedDurationMin = (sorted[ranges[i].endIdx].timestampMs - sorted[prev.startIdx].timestampMs) / 60000;
-                  if (gapMin <= PUMP_RUN_MERGE_GAP_MIN && mergedDurationMin <= MAX_MERGED_RUN_DURATION_MIN) {
-                    prev.endIdx = ranges[i].endIdx;
-                  } else {
-                    merged.push({ ...ranges[i] });
-                  }
-                }
-                return merged;
               };
 
               // PostgREST caps an unfiltered .select() at 1000 rows (db_max_rows) — pump_run_summary long
@@ -3542,23 +3529,24 @@ function MasterTablesSection() {
                 return rows;
               };
 
-              // Dedup LOW_WATER_LEVEL/DRY_RUN_RISK alerts by (well_id, underlying reading date) so
-              // re-running the sync over the same historical window never raises a second alert for a
-              // day already logged.
-              const { data: existingLowWaterAlerts } = await supabase
-                .from('alert_logs')
-                .select('well_id, triggered_at')
-                .eq('alert_code', 'LOW_WATER_LEVEL');
-              const lowWaterAlertedDates = new Set<string>(
-                (existingLowWaterAlerts || []).map((a: any) => `${a.well_id}_${String(a.triggered_at).slice(0, 10)}`)
+              // One alert per episode: raised the first day its trigger condition holds, expired the
+              // first later day its exit condition holds (alert_definitions.expiry_logic). alertedDates
+              // stops a re-run over the same window from raising a second alert for a day already logged.
+              const existingAlerts = await fetchAllRows(
+                'alert_logs',
+                'alert_id, alert_code, well_id, status, triggered_at',
+                'alert_id',
+                (q) => q.in('alert_code', ['LOW_WATER_LEVEL', 'DRY_RUN_RISK']),
               );
-              const { data: existingDryRunAlerts } = await supabase
-                .from('alert_logs')
-                .select('well_id, triggered_at')
-                .eq('alert_code', 'DRY_RUN_RISK');
-              const dryRunAlertedDates = new Set<string>(
-                (existingDryRunAlerts || []).map((a: any) => `${a.well_id}_${String(a.triggered_at).slice(0, 10)}`)
+              const alertedDates = new Set<string>(
+                existingAlerts.map((a: any) => `${a.alert_code}_${a.well_id}_${istDateKey(Date.parse(a.triggered_at))}`),
               );
+              const openAlerts = new Map<string, { alertId: string; date: string }>();
+              for (const a of existingAlerts) {
+                if (a.status === 'active') {
+                  openAlerts.set(`${a.alert_code}_${a.well_id}`, { alertId: a.alert_id, date: istDateKey(Date.parse(a.triggered_at)) });
+                }
+              }
 
               // Seed calculation maps from existing curated rows (read-only). Sync never invents dimensions.
               const { data: existingWells } = await supabase
@@ -3711,7 +3699,7 @@ function MasterTablesSection() {
 
               // 2. Process Telemetry & Calculate All Summaries (B through J)
               if (readings && typeof readings === 'object') {
-                const wellReadingsByDate = new Map<string, Map<string, { depth: number; timestampMs: number }[]>>();
+                const wellReadingsByDate = new Map<string, Map<string, PumpPoint[]>>();
                 const rawRowsToInsert: any[] = [];
 
                 for (const [batchKey, batchNode] of Object.entries(readings)) {
@@ -3720,30 +3708,21 @@ function MasterTablesSection() {
                   const deviceId = batchKey;
                   const wellId = `WEL-${deviceId}`;
 
+                  const wellDepthForReadings = wellDepthMap.get(wellId);
                   const entries = Object.entries(batchNode as Record<string, any>);
                   for (const [rKey, r] of entries) {
                     if (!r || typeof r !== 'object') continue;
                     const depth = Number(r.depth);
-                    if (isNaN(depth) || depth <= 0 || depth > 100) continue;
+                    if (!isUsableDepth(depth, { wellDepthM: wellDepthForReadings, qualityOk: readingQualityOk(r) })) continue;
 
-                    let timestamp = r.collectedDateTime || r.collectedDate;
-                    if (!timestamp || String(timestamp).includes("UNSYNCED") || String(timestamp).includes("uptime")) {
-                      const numKey = Number(rKey);
-                      if (!isNaN(numKey) && numKey > 1000000000) {
-                        const ms = numKey < 1e12 ? numKey * 1000 : numKey;
-                        timestamp = new Date(ms).toISOString();
-                      } else {
-                        timestamp = new Date().toISOString();
-                      }
-                    }
+                    // Device times are IST without a zone — parsed the same way whatever timezone this
+                    // browser is in. Clock-unset readings are dropped, never stamped "now".
+                    const readingTimeMs = readingTimestampMs(rKey, r);
+                    if (readingTimeMs == null || readingTimeMs < cutoffTimeMs) continue;
 
-                    const readingTimeMs = new Date(timestamp).getTime();
-                    if (Number.isFinite(readingTimeMs) && readingTimeMs < cutoffTimeMs) {
-                      continue;
-                    }
-
-                    const isoDate = new Date(timestamp).toISOString();
-                    const readingDate = isoDate.split('T')[0];
+                    const isoDate = new Date(readingTimeMs).toISOString();
+                    const readingDate = istDateKey(readingTimeMs);
+                    const onlineSinceMs = readingTimestampMs('', { collectedDateTime: r.deviceOnlineSince });
 
                     rawRowsToInsert.push({
                       device_id: deviceId,
@@ -3751,7 +3730,7 @@ function MasterTablesSection() {
                       depth_meters: depth,
                       timestamp: isoDate,
                       uptime: r.uptimeSeconds || null,
-                      online_since: r.deviceOnlineSince ? new Date(r.deviceOnlineSince).toISOString() : null,
+                      online_since: onlineSinceMs != null ? new Date(onlineSinceMs).toISOString() : null,
                     });
 
                     rawCount++;
@@ -3760,7 +3739,11 @@ function MasterTablesSection() {
                     if (!wellReadingsByDate.has(wellId)) wellReadingsByDate.set(wellId, new Map());
                     const dateMap = wellReadingsByDate.get(wellId)!;
                     if (!dateMap.has(readingDate)) dateMap.set(readingDate, []);
-                    dateMap.get(readingDate)!.push({ depth, timestampMs: readingTimeMs });
+                    dateMap.get(readingDate)!.push({
+                      depth,
+                      timestampMs: readingTimeMs,
+                      onlineSince: typeof r.deviceOnlineSince === 'string' ? r.deviceOnlineSince : null,
+                    });
                   }
                 }
 
@@ -3772,87 +3755,53 @@ function MasterTablesSection() {
                     uniqueRowsMap.set(key, row);
                   }
                 }
-                const deduplicatedRows = Array.from(uniqueRowsMap.values());
-
-                // Filter out rows that already exist in Supabase raw_sensor_data to eliminate 409 Conflict status responses
-                const { data: existingRecords } = await supabase.from('raw_sensor_data').select('device_id, timestamp');
-                const existingKeysSet = new Set((existingRecords || []).map((r: any) => `${r.device_id}_${r.timestamp}`));
-
-                const rowsToUpsert = deduplicatedRows.filter((r) => !existingKeysSet.has(`${r.device_id}_${r.timestamp}`));
-
-                if (rowsToUpsert.length > 0) {
-                  for (let i = 0; i < rowsToUpsert.length; i += 200) {
-                    const chunk = rowsToUpsert.slice(i, i + 200);
-                    await supabase.from('raw_sensor_data').upsert(chunk, { onConflict: 'device_id,timestamp', ignoreDuplicates: true });
-                  }
+                // The (device_id, timestamp) unique constraint does the duplicate check — a pre-select
+                // was capped at 1,000 rows by PostgREST and so missed most existing rows.
+                const rowsToUpsert = Array.from(uniqueRowsMap.values());
+                for (let i = 0; i < rowsToUpsert.length; i += 200) {
+                  const chunk = rowsToUpsert.slice(i, i + 200);
+                  const { error } = await supabase
+                    .from('raw_sensor_data')
+                    .upsert(chunk, { onConflict: 'device_id,timestamp', ignoreDuplicates: true });
+                  if (error) throw error;
                 }
 
                 // 2.5. Detect Pump Runs from Raw Depth Readings & Insert into pump_run_summary (C)
-                // Replaces (delete + insert) each well/date's rows every run rather than only ever
-                // adding to them — necessary now that merging can change a run's start/stop timestamps,
-                // so a fragment detected by an earlier run wouldn't otherwise be superseded by its
-                // merged replacement and would linger alongside it, double-counting extraction. Only
-                // touches well/dates within the current time-range window; older history is untouched.
+                // Runs are detected over the well's whole window (so pumping across midnight stays one
+                // run) with the same rules as the dashboard, then filed under the IST date they started.
+                // Each date in the window is replaced (delete + insert) — the window starts at 00:00 IST,
+                // so every date here is rebuilt from a full day of readings.
                 for (const [wellId, dateMap] of wellReadingsByDate.entries()) {
-                  const wellDiameterForRuns = wellDiameterMap.get(wellId);
-                  const wellAreaForRuns =
-                    wellDiameterForRuns != null ? 3.14159265 * Math.pow(wellDiameterForRuns / 2, 2) : null;
+                  const wellAreaForRuns = wellAreaM2(wellDiameterMap.get(wellId));
+                  const sorted = Array.from(dateMap.values()).flat().sort((a, b) => a.timestampMs - b.timestampMs);
 
-                  for (const [dateStr, readings] of dateMap.entries()) {
-                    const sorted = [...readings].sort((a, b) => a.timestampMs - b.timestampMs);
-                    if (sorted.length < 2) continue;
+                  const runsByDate = new Map<string, { start: PumpPoint; end: PumpPoint }[]>();
+                  for (const range of detectPumpRunRanges(sorted)) {
+                    const start = sorted[range.startIdx];
+                    const end = sorted[range.endIdx];
+                    if (!isCountablePumpRun(start, end)) continue;
+                    const runDate = istDateKey(start.timestampMs);
+                    const list = runsByDate.get(runDate) || [];
+                    list.push({ start, end });
+                    runsByDate.set(runDate, list);
+                  }
 
-                    const rawRanges: { startIdx: number; endIdx: number }[] = [];
-                    let runStart: number | null = null;
-                    for (let idx = 1; idx < sorted.length; idx++) {
-                      const diff = sorted[idx].depth - sorted[idx - 1].depth;
-                      if (diff >= 0.02) {
-                        if (runStart === null) runStart = idx - 1;
-                      } else {
-                        if (runStart !== null) {
-                          rawRanges.push({ startIdx: runStart, endIdx: idx - 1 });
-                          runStart = null;
-                        }
-                      }
-                    }
-                    if (runStart !== null) {
-                      rawRanges.push({ startIdx: runStart, endIdx: sorted.length - 1 });
-                    }
-
-                    // Fold sensor-jitter fragments back together (see PUMP_RUN_MERGE_GAP_MIN) before
-                    // evaluating drop/duration thresholds — a run briefly interrupted by one
-                    // non-rising sample shouldn't be counted as two separate runs.
-                    const runs = mergeAdjacentRuns(sorted, rawRanges);
-
-                    // Filter out sensor-noise blips: a real pump cycle causes a cumulative rise of at
-                    // least PUMP_MIN_RUN_DROP_M and lasts at least PUMP_MIN_RUN_DURATION_MS. Without this,
-                    // a single noisy pair of readings a few milliseconds apart registers as a "run".
-                    const validRuns = runs.filter((run) => {
-                      const startPoint = sorted[run.startIdx];
-                      const endPoint = sorted[run.endIdx];
-                      const drop = endPoint.depth - startPoint.depth;
-                      const durationMs = endPoint.timestampMs - startPoint.timestampMs;
-                      return drop >= PUMP_MIN_RUN_DROP_M && durationMs >= PUMP_MIN_RUN_DURATION_MS;
-                    });
-
-                    const rowsForDate = validRuns.map((run, idx) => {
-                      const startPoint = sorted[run.startIdx];
-                      const endPoint = sorted[run.endIdx];
-                      const drop = Math.max(0, endPoint.depth - startPoint.depth);
-                      const runtimeMinutes = Math.max(0, (endPoint.timestampMs - startPoint.timestampMs) / 60000);
-                      const extractionLiters = wellAreaForRuns != null ? wellAreaForRuns * drop * 1000.0 : 0;
+                  for (const dateStr of dateMap.keys()) {
+                    const runs = runsByDate.get(dateStr) || [];
+                    const rowsForDate = runs.map(({ start, end }, idx) => {
+                      const drop = Math.max(0, end.depth - start.depth);
                       return {
                         well_id: wellId,
                         run_date: dateStr,
-                        pump_start_time: new Date(startPoint.timestampMs).toISOString(),
-                        pump_stop_time: new Date(endPoint.timestampMs).toISOString(),
-                        pump_runtime_minutes: runtimeMinutes,
-                        pump_start_depth_meters: startPoint.depth,
-                        pump_stop_depth_meters: endPoint.depth,
+                        pump_start_time: new Date(start.timestampMs).toISOString(),
+                        pump_stop_time: new Date(end.timestampMs).toISOString(),
+                        pump_runtime_minutes: Math.max(0, (end.timestampMs - start.timestampMs) / 60000),
+                        pump_start_depth_meters: start.depth,
+                        pump_stop_depth_meters: end.depth,
                         water_level_drop_during_run_meters: drop,
-                        pump_extraction_per_run_liters: extractionLiters,
+                        pump_extraction_per_run_liters: wellAreaForRuns != null ? wellAreaForRuns * drop * 1000.0 : 0,
                         is_first_run_of_day: idx === 0,
-                        is_last_run_of_day: idx === validRuns.length - 1,
+                        is_last_run_of_day: idx === runs.length - 1,
                         updated_at: new Date().toISOString(),
                       };
                     });
@@ -3868,7 +3817,7 @@ function MasterTablesSection() {
                 // Scoped to the same readings window this run is processing, and paginated (see
                 // fetchAllRows) since pump_run_summary has long since grown past PostgREST's 1000-row
                 // default select cap.
-                const pumpRunCutoffDateStr = new Date(cutoffTimeMs).toISOString().split('T')[0];
+                const pumpRunCutoffDateStr = windowStartDate;
                 const pumpRunRows = await fetchAllRows(
                   'pump_run_summary',
                   'well_id, run_date, pump_runtime_minutes, pump_extraction_per_run_liters, water_level_drop_during_run_meters',
@@ -3892,32 +3841,49 @@ function MasterTablesSection() {
                 // feeds weekly_monthly_district_summary alongside the rolling 30-day extraction computed below.
                 const districtWeeklyAgg = new Map<string, { sevenDaySum: number; sevenDayCount: number; thirtyDaySum: number; thirtyDayCount: number }>();
 
+                // Daily medians from just before the window, so 7- and 30-day changes have something
+                // to compare against on the window's first days.
+                const priorMedianRows = await fetchAllRows(
+                  'daily_well_summary',
+                  'well_id, date, daily_median_water_depth_meters, daily_water_extraction_liters',
+                  'date',
+                  (q) => q.gte('date', addDaysToDateKey(windowStartDate, -31)).lt('date', windowStartDate),
+                );
+                const priorMediansByWell = new Map<string, Map<string, number>>();
+                const priorExtractionByWell = new Map<string, Map<string, number>>();
+                for (const row of priorMedianRows) {
+                  const median = Number(row.daily_median_water_depth_meters);
+                  if (Number.isFinite(median)) {
+                    if (!priorMediansByWell.has(row.well_id)) priorMediansByWell.set(row.well_id, new Map());
+                    priorMediansByWell.get(row.well_id)!.set(row.date, median);
+                  }
+                  if (!priorExtractionByWell.has(row.well_id)) priorExtractionByWell.set(row.well_id, new Map());
+                  priorExtractionByWell.get(row.well_id)!.set(row.date, Number(row.daily_water_extraction_liters) || 0);
+                }
+
                 for (const [wellId, dateMap] of wellReadingsByDate.entries()) {
                   const sortedDates = Array.from(dateMap.keys()).sort();
                   const wellDepth = wellDepthMap.get(wellId);
-                  const wellDiameter = wellDiameterMap.get(wellId);
                   const pumpIntake = wellPumpIntakeMap.get(wellId);
-                  const wellArea = wellDiameter != null ? 3.14159265 * Math.pow(wellDiameter / 2, 2) : null;
+                  const wellArea = wellAreaM2(wellDiameterMap.get(wellId));
                   const district = wellDistrictMap.get(wellId);
                   const state = wellStateMap.get(wellId);
 
-                  const dailyExtractionHistory: number[] = [];
-                  const dailyMedianByDate = new Map<string, number>();
-                  for (let i = 0; i < sortedDates.length; i++) {
-                    const dateStr = sortedDates[i];
-                    const depths = dateMap.get(dateStr)!.map(r => r.depth).sort((a, b) => a - b);
-                    const mid = Math.floor(depths.length / 2);
-                    const medianDepth = depths.length % 2 !== 0 ? depths[mid] : (depths[mid - 1] + depths[mid]) / 2;
+                  const dailyExtractionByDate = new Map<string, number>(priorExtractionByWell.get(wellId) || []);
+                  const dailyMedianByDate = new Map<string, number>(priorMediansByWell.get(wellId) || []);
+                  for (const dateStr of sortedDates) {
+                    const dayReadings = dateMap.get(dateStr)!;
+                    const medianDepth = medianOf(dayReadings.map(r => r.depth));
                     dailyMedianByDate.set(dateStr, medianDepth);
+                    const lastReadingMs = Math.max(...dayReadings.map(r => r.timestampMs));
 
-                    const remainingDepth = wellDepth != null ? wellDepth - medianDepth : null;
+                    const safety = wellSafety({ medianDepthM: medianDepth, wellDepthM: wellDepth, pumpIntakeM: pumpIntake });
+                    const remainingDepth = safety.remainingDepthM;
                     const remainingVolumeLiters =
                       remainingDepth != null && wellArea != null ? wellArea * remainingDepth * 1000.0 : null;
-                    const safetyBuffer =
-                      remainingDepth != null && pumpIntake != null ? remainingDepth - pumpIntake : null;
-                    const dryRunRisk = safetyBuffer != null ? safetyBuffer <= 1.0 : false;
-                    const safePumpOp = safetyBuffer != null ? safetyBuffer > pumpIntake! : true;
-                    const lowWaterLevel = wellDepth != null ? medianDepth > 0.8 * wellDepth : false;
+                    const safetyBuffer = safety.safetyBufferM;
+                    const dryRunRisk = safety.dryRunRisk;
+                    const safePumpOp = safety.safePumpOperation;
 
                     // Use actual pump run data — no re-derivation, no fabrication
                     const runAgg = pumpRunsByWellDate.get(`${wellId}_${dateStr}`) || { count: 0, runtime: 0, extraction: 0, drop: 0 };
@@ -3925,39 +3891,37 @@ function MasterTablesSection() {
                     const dailyPumpRuntimeMinutes = runAgg.runtime;
                     const dailyWaterExtractionLiters = runAgg.extraction;
                     const totalDropMeters = runAgg.drop;
-                    dailyExtractionHistory.push(dailyWaterExtractionLiters);
-                    const last7 = dailyExtractionHistory.slice(-7);
-                    const sevenDayWaterExtractionLiters = last7.reduce((a, b) => a + b, 0);
-                    const avgSevenDayExtractionLiters = sevenDayWaterExtractionLiters / last7.length;
+                    dailyExtractionByDate.set(dateStr, dailyWaterExtractionLiters);
+                    // 7 calendar days ending today, not the last 7 days that happened to have data.
+                    const sevenDay = rollingCalendarWindow(dailyExtractionByDate, dateStr, 7);
+                    const sevenDayWaterExtractionLiters = sevenDay.sum;
+                    const avgSevenDayExtractionLiters = sevenDay.avg;
 
                     // Weekly/Monthly Well Summary (E) — populated every day so daily_well_summary below reads
                     // avg_seven_day_extraction_liters back from this same table, not a private local copy.
+                    const change7Days = depthChangeOverDays(dailyMedianByDate, dateStr, 7);
+                    const change30Days = depthChangeOverDays(dailyMedianByDate, dateStr, 30);
                     const weeklyPayload: Record<string, unknown> = {
                       well_id: wellId,
                       calculation_date: dateStr,
                       seven_day_water_extraction_liters: sevenDayWaterExtractionLiters,
                       avg_seven_day_extraction_liters: avgSevenDayExtractionLiters,
+                      seven_day_depth_change_meters: change7Days,
+                      thirty_day_depth_change_meters: change30Days,
                       updated_at: new Date().toISOString(),
                     };
-                    if (i >= 7) {
-                      const date7Ago = sortedDates[i - 7];
-                      const depth7Ago = dailyMedianByDate.get(date7Ago);
-                      if (depth7Ago != null) {
-                        const change7Days = medianDepth - depth7Ago;
-                        const change30Days = change7Days * 4.0;
-                        weeklyPayload.seven_day_depth_change_meters = change7Days;
-                        weeklyPayload.thirty_day_depth_change_meters = change30Days;
-
-                        if (district) {
-                          const wAggKey = `${district}__${dateStr}`;
-                          const wAgg = districtWeeklyAgg.get(wAggKey) || { sevenDaySum: 0, sevenDayCount: 0, thirtyDaySum: 0, thirtyDayCount: 0 };
-                          wAgg.sevenDaySum += change7Days;
-                          wAgg.sevenDayCount += 1;
-                          wAgg.thirtyDaySum += change30Days;
-                          wAgg.thirtyDayCount += 1;
-                          districtWeeklyAgg.set(wAggKey, wAgg);
-                        }
+                    if (district && (change7Days != null || change30Days != null)) {
+                      const wAggKey = `${district}__${dateStr}`;
+                      const wAgg = districtWeeklyAgg.get(wAggKey) || { sevenDaySum: 0, sevenDayCount: 0, thirtyDaySum: 0, thirtyDayCount: 0 };
+                      if (change7Days != null) {
+                        wAgg.sevenDaySum += change7Days;
+                        wAgg.sevenDayCount += 1;
                       }
+                      if (change30Days != null) {
+                        wAgg.thirtyDaySum += change30Days;
+                        wAgg.thirtyDayCount += 1;
+                      }
+                      districtWeeklyAgg.set(wAggKey, wAgg);
                     }
                     await supabase.from('weekly_monthly_well_summary').upsert(weeklyPayload, { onConflict: 'well_id, calculation_date' });
 
@@ -3991,44 +3955,52 @@ function MasterTablesSection() {
                       safety_buffer_meters: safetyBuffer,
                       dry_run_risk_boolean: dryRunRisk,
                       safe_pump_operation_boolean: safePumpOp,
-                      device_health_status: 'Active',
+                      device_health_status: deviceHealthForDay(lastReadingMs, dateStr),
                       updated_at: new Date().toISOString(),
                     }, { onConflict: 'well_id, date' });
 
                     // Alert Log Generation (J)
-                    if (dryRunRisk && safetyBuffer != null) {
-                      const dryRunAlertKey = `${wellId}_${dateStr}`;
-                      if (!dryRunAlertedDates.has(dryRunAlertKey)) {
-                        await supabase.from('alert_logs').insert({
-                          alert_code: 'DRY_RUN_RISK',
+                    const alertChecks = [
+                      {
+                        code: 'DRY_RUN_RISK',
+                        triggered: dryRunRisk && safetyBuffer != null,
+                        cleared: safety.dryRunCleared,
+                        field: 'safetyBufferMeters',
+                        value: safetyBuffer != null ? `${safetyBuffer.toFixed(2)}m` : '',
+                      },
+                      {
+                        code: 'LOW_WATER_LEVEL',
+                        triggered: safety.lowWaterLevel,
+                        cleared: safety.lowWaterCleared,
+                        field: 'dailyMedianWaterDepthMeters',
+                        value: `${medianDepth.toFixed(2)}m`,
+                      },
+                    ];
+                    for (const check of alertChecks) {
+                      const openKey = `${check.code}_${wellId}`;
+                      const open = openAlerts.get(openKey);
+                      if (check.triggered && !open) {
+                        const datedKey = `${check.code}_${wellId}_${dateStr}`;
+                        if (alertedDates.has(datedKey)) continue;
+                        const { data: inserted } = await supabase.from('alert_logs').insert({
+                          alert_code: check.code,
                           well_id: wellId,
                           district: district || null,
                           state: state || null,
                           alert_type: 'warning',
-                          trigger_field: 'safetyBufferMeters',
-                          trigger_value: `${safetyBuffer.toFixed(2)}m`,
+                          trigger_field: check.field,
+                          trigger_value: check.value,
                           status: 'active',
-                          triggered_at: new Date(`${dateStr}T12:00:00.000Z`).toISOString(),
-                        });
-                        dryRunAlertedDates.add(dryRunAlertKey);
-                      }
-                    }
-
-                    if (lowWaterLevel) {
-                      const alertKey = `${wellId}_${dateStr}`;
-                      if (!lowWaterAlertedDates.has(alertKey)) {
-                        await supabase.from('alert_logs').insert({
-                          alert_code: 'LOW_WATER_LEVEL',
-                          well_id: wellId,
-                          district: district || null,
-                          state: state || null,
-                          alert_type: 'warning',
-                          trigger_field: 'dailyMedianWaterDepthMeters',
-                          trigger_value: `${medianDepth.toFixed(2)}m`,
-                          status: 'active',
-                          triggered_at: new Date(`${dateStr}T12:00:00.000Z`).toISOString(),
-                        });
-                        lowWaterAlertedDates.add(alertKey);
+                          triggered_at: istNoonIso(dateStr),
+                        }).select('alert_id').maybeSingle();
+                        alertedDates.add(datedKey);
+                        if (inserted?.alert_id) openAlerts.set(openKey, { alertId: inserted.alert_id, date: dateStr });
+                      } else if (check.cleared && open && open.date < dateStr) {
+                        await supabase
+                          .from('alert_logs')
+                          .update({ status: 'expired', expired_at: istNoonIso(dateStr) })
+                          .eq('alert_id', open.alertId);
+                        openAlerts.delete(openKey);
                       }
                     }
 
